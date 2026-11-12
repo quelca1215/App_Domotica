@@ -12,7 +12,7 @@ class HomeAutomationProvider extends ChangeNotifier {
   bool _isLightOn = false;
   ESP32ConnectionStatus _connectionStatus = ESP32ConnectionStatus.disconnected;
   String? _connectionError;
-  bool _isESP32Available = true; // Por defecto asumimos disponible en simulación
+  bool _isESP32Available = false; // Se activa cuando el ESP32 envía status o LWT online
   DeviceTelemetry _telemetry = DeviceTelemetry(lastSeen: DateTime.now());
   MqttConfig _config = const MqttConfig();
   bool _isInitialized = false;
@@ -48,6 +48,7 @@ class HomeAutomationProvider extends ChangeNotifier {
 
   void _setupCallbacks() {
     _mqttService.onRelayStateReceived = (bool isOn) {
+      _isESP32Available = true;
       _addLog('ESP32 reportó estado: ${isOn ? "ENCENDIDO" : "APAGADO"}');
       _setLightInternal(isOn, notifyESP32: false);
     };

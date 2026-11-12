@@ -20,7 +20,7 @@ class MqttConfig {
     this.topicStatus = 'domotica/cuarto/luz/state',
     this.topicAvailability = 'domotica/cuarto/esp32/status',
     this.topicTelemetry = 'domotica/cuarto/telemetria',
-    this.useSimulation = true,
+    this.useSimulation = false,
   });
 
   MqttConfig copyWith({
@@ -62,7 +62,7 @@ class MqttConfig {
           json['topicAvailability']?.toString() ?? 'domotica/cuarto/esp32/status',
       topicTelemetry:
           json['topicTelemetry']?.toString() ?? 'domotica/cuarto/telemetria',
-      useSimulation: json['useSimulation'] as bool? ?? true,
+      useSimulation: json['useSimulation'] as bool? ?? false,
     );
   }
 
