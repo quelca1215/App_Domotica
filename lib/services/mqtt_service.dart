@@ -9,6 +9,9 @@ import '../models/mqtt_config.dart';
 typedef OnRelayStateReceived = void Function(bool isOn);
 typedef OnAvailabilityReceived = void Function(bool isOnline);
 typedef OnTelemetryReceived = void Function(Map<String, dynamic> data);
+typedef OnOperatingModeReceived = void Function(OperatingMode mode);
+typedef OnLightSensorReceived = void Function(double lightLevel);
+typedef OnManualSwitchReceived = void Function(bool isClosed);
 typedef OnConnectionStatusChanged = void Function(ESP32ConnectionStatus status, String? error);
 
 class MqttService {
@@ -18,6 +21,9 @@ class MqttService {
   OnRelayStateReceived? onRelayStateReceived;
   OnAvailabilityReceived? onAvailabilityReceived;
   OnTelemetryReceived? onTelemetryReceived;
+  OnOperatingModeReceived? onOperatingModeReceived;
+  OnLightSensorReceived? onLightSensorReceived;
+  OnManualSwitchReceived? onManualSwitchReceived;
   OnConnectionStatusChanged? onConnectionStatusChanged;
 
   ESP32ConnectionStatus _status = ESP32ConnectionStatus.disconnected;
@@ -103,14 +109,13 @@ class MqttService {
     if (_client == null || !isConnected) return;
 
     try {
-      debugPrint('[MQTT] Suscribiendo a ${_config.topicStatus}');
+      debugPrint('[MQTT] Suscribiendo a topics de control...');
       _client!.subscribe(_config.topicStatus, MqttQos.atLeastOnce);
-
-      debugPrint('[MQTT] Suscribiendo a ${_config.topicAvailability}');
       _client!.subscribe(_config.topicAvailability, MqttQos.atLeastOnce);
-
-      debugPrint('[MQTT] Suscribiendo a ${_config.topicTelemetry}');
       _client!.subscribe(_config.topicTelemetry, MqttQos.atLeastOnce);
+      _client!.subscribe(_config.topicMode, MqttQos.atLeastOnce);
+      _client!.subscribe(_config.topicLightSensor, MqttQos.atLeastOnce);
+      _client!.subscribe(_config.topicManualSwitch, MqttQos.atLeastOnce);
     } catch (e) {
       debugPrint('[MQTT] Error al suscribir a topics: $e');
     }
@@ -133,6 +138,12 @@ class MqttService {
           _processAvailabilityMessage(payload);
         } else if (topic == _config.topicTelemetry) {
           _processTelemetryMessage(payload);
+        } else if (topic == _config.topicMode) {
+          _processModeMessage(payload);
+        } else if (topic == _config.topicLightSensor) {
+          _processLightSensorMessage(payload);
+        } else if (topic == _config.topicManualSwitch) {
+          _processManualSwitchMessage(payload);
         }
       }
     });
@@ -145,7 +156,6 @@ class MqttService {
     } else if (clean == 'OFF' || clean == '0' || clean == 'FALSE') {
       onRelayStateReceived?.call(false);
     } else {
-      // Intentar JSON { "state": "ON" } o { "relay": 1 }
       try {
         final json = jsonDecode(payload);
         if (json is Map) {
@@ -176,6 +186,30 @@ class MqttService {
     } catch (_) {}
   }
 
+  void _processModeMessage(String payload) {
+    final clean = payload.trim().toUpperCase();
+    if (clean == 'APP' || clean == '0') {
+      onOperatingModeReceived?.call(OperatingMode.app);
+    } else if (clean == 'PHOTOCELL' || clean == 'FOTOCELULA' || clean == '1') {
+      onOperatingModeReceived?.call(OperatingMode.photocell);
+    } else if (clean == 'MANUAL' || clean == 'SWITCH' || clean == '2') {
+      onOperatingModeReceived?.call(OperatingMode.manual);
+    }
+  }
+
+  void _processLightSensorMessage(String payload) {
+    final level = double.tryParse(payload.trim());
+    if (level != null) {
+      onLightSensorReceived?.call(level.clamp(0.0, 100.0));
+    }
+  }
+
+  void _processManualSwitchMessage(String payload) {
+    final clean = payload.trim().toUpperCase();
+    final isClosed = clean == 'CLOSED' || clean == 'ON' || clean == '1';
+    onManualSwitchReceived?.call(isClosed);
+  }
+
   Future<bool> publishRelayCommand(bool turnOn) async {
     if (_client == null || !isConnected) {
       debugPrint('[MQTT] No conectado. No se puede enviar comando.');
@@ -191,12 +225,45 @@ class MqttService {
         _config.topicCommand,
         MqttQos.atLeastOnce,
         builder.payload!,
-        retain: true, // Retener para que el ESP32 reciba el último estado al conectarse
+        retain: true,
       );
       debugPrint('[MQTT Publicado] ${_config.topicCommand} -> $commandStr');
       return true;
     } catch (e) {
       debugPrint('[MQTT] Error al publicar comando: $e');
+      return false;
+    }
+  }
+
+  Future<bool> publishOperatingMode(OperatingMode mode) async {
+    if (_client == null || !isConnected) return false;
+
+    try {
+      final builder = MqttClientPayloadBuilder();
+      String modeStr;
+      switch (mode) {
+        case OperatingMode.app:
+          modeStr = 'APP';
+          break;
+        case OperatingMode.photocell:
+          modeStr = 'FOTOCELULA';
+          break;
+        case OperatingMode.manual:
+          modeStr = 'MANUAL';
+          break;
+      }
+      builder.addString(modeStr);
+
+      _client!.publishMessage(
+        _config.topicMode,
+        MqttQos.atLeastOnce,
+        builder.payload!,
+        retain: true,
+      );
+      debugPrint('[MQTT Publicado Modo] ${_config.topicMode} -> $modeStr');
+      return true;
+    } catch (e) {
+      debugPrint('[MQTT] Error al publicar modo: $e');
       return false;
     }
   }

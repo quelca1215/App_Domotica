@@ -10,9 +10,8 @@ class Esp32GuideDialog extends StatelessWidget {
   String get _arduinoCode => '''
 /*
   ==============================================================
-  CÓDIGO ESP32 PARA DOMÓTICA IoT (CONTROL DE RELÉ / FOCO)
-  Conexión por Internet a través de Broker MQTT
-  Compatible con la App Flutter
+  DOMÓTICA IoT: ESP32 CON 3 MODOS DE CONTROL (APP / FOTOCÉLULA / MANUAL NA)
+  Sincronizado con la App Flutter
   ==============================================================
   Librerías requeridas (Instalar desde el Gestor de Bibliotecas de Arduino):
   1. PubSubClient by Nick O'Leary
@@ -26,25 +25,45 @@ class Esp32GuideDialog extends StatelessWidget {
 const char* ssid = "TU_NOMBRE_DE_WIFI";
 const char* password = "TU_PASSWORD_WIFI";
 
-// 2. Configuración del Broker MQTT (Mismos datos configurados en la App)
+// 2. Configuración del Broker MQTT
 const char* mqtt_server = "${config.broker}";
 const int mqtt_port = ${config.port};
 
 // 3. Topics MQTT sincronizados con la App
-const char* TOPIC_COMMAND = "${config.topicCommand}";      // Escucha órdenes de la App
-const char* TOPIC_STATE = "${config.topicStatus}";          // Reporta estado a la App
-const char* TOPIC_AVAILABILITY = "${config.topicAvailability}"; // Heartbeat / LWT
+const char* TOPIC_COMMAND       = "${config.topicCommand}";       // Comandos ON/OFF directos
+const char* TOPIC_STATE         = "${config.topicStatus}";        // Estado real del foco
+const char* TOPIC_AVAILABILITY  = "${config.topicAvailability}";  // Presencia LWT
+const char* TOPIC_MODE          = "${config.topicMode}";          // APP, FOTOCELULA, MANUAL
+const char* TOPIC_LIGHT_SENSOR  = "${config.topicLightSensor}";   // Nivel de luz (0-100%)
+const char* TOPIC_MANUAL_SWITCH = "${config.topicManualSwitch}";  // Estado interruptor NA
 
-// 4. Pin GPIO conectado al pin IN del Módulo Relé
-const int RELAY_PIN = 23; // Puedes usar GPIO 23, 22, 19, etc.
+// 4. Pines del ESP32
+const int RELAY_PIN         = 23; // Pin digital conectado al relé
+const int LDR_PIN           = 34; // Pin analógico ADC para fotocélula (sensor de luz)
+const int MANUAL_SWITCH_PIN = 4;  // Pin digital para pulsador/switch NA (a GND)
 
-// NOTA: La mayoría de módulos relé son "Active LOW" (0V activa, 3.3V apaga).
-// Si tu relé es Active HIGH, cambia estas constantes:
-const int RELAY_ON = LOW;   // O HIGH según tu modelo de relé
-const int RELAY_OFF = HIGH; // O LOW
+// Lógica del Relé (Active LOW en la mayoría de módulos Songle)
+const int RELAY_ON  = LOW;  
+const int RELAY_OFF = HIGH; 
+
+// Modos de Operación: 0 = APP, 1 = FOTOCELULA, 2 = MANUAL
+enum ModoControl { MODO_APP, MODO_FOTOCELULA, MODO_MANUAL };
+ModoControl modoActual = MODO_APP;
+
+bool focoEncendido = false;
+unsigned long ultimoSensorMillis = 0;
 
 WiFiClient espClient;
 PubSubClient client(espClient);
+
+void encenderFoco(bool encender) {
+  if (focoEncendido != encender) {
+    focoEncendido = encender;
+    digitalWrite(RELAY_PIN, encender ? RELAY_ON : RELAY_OFF);
+    client.publish(TOPIC_STATE, encender ? "ON" : "OFF", true);
+    Serial.println(encender ? ">> FOCO ENCENDIDO" : ">> FOCO APAGADO");
+  }
+}
 
 void setup_wifi() {
   delay(10);
@@ -60,59 +79,61 @@ void setup_wifi() {
     Serial.print(".");
   }
 
-  Serial.println("");
-  Serial.println("¡WiFi Conectado!");
-  Serial.print("Dirección IP local: ");
-  Serial.println(WiFi.localIP());
+  Serial.println("\n¡WiFi Conectado!");
 }
 
-// Callback: Se ejecuta cuando la App Flutter envía una orden
+// Callback: Recibe mensajes desde la App Flutter
 void callback(char* topic, byte* message, unsigned int length) {
-  String messageTemp;
+  String msg = "";
   for (int i = 0; i < length; i++) {
-    messageTemp += (char)message[i];
+    msg += (char)message[i];
   }
+  msg.trim();
   
-  Serial.print("Mensaje recibido en topic [");
+  Serial.print("[MQTT Recibido] [");
   Serial.print(topic);
   Serial.print("]: ");
-  Serial.println(messageTemp);
+  Serial.println(msg);
 
-  if (String(topic) == TOPIC_COMMAND) {
-    if (messageTemp == "ON") {
-      digitalWrite(RELAY_PIN, RELAY_ON);
-      Serial.println(">> Relé CERRADO -> Foco ENCENDIDO");
-      client.publish(TOPIC_STATE, "ON", true); // Reportar a la App
-    } else if (messageTemp == "OFF") {
-      digitalWrite(RELAY_PIN, RELAY_OFF);
-      Serial.println(">> Relé ABIERTO -> Foco APAGADO");
-      client.publish(TOPIC_STATE, "OFF", true); // Reportar a la App
+  // Cambio de Modo
+  if (String(topic) == TOPIC_MODE) {
+    if (msg == "APP" || msg == "0") {
+      modoActual = MODO_APP;
+      Serial.println(">> Modo cambiado a: CONTROL POR APP");
+    } else if (msg == "FOTOCELULA" || msg == "1") {
+      modoActual = MODO_FOTOCELULA;
+      Serial.println(">> Modo cambiado a: FOTOCÉLULA INTELIGENTE");
+    } else if (msg == "MANUAL" || msg == "2") {
+      modoActual = MODO_MANUAL;
+      Serial.println(">> Modo cambiado a: INTERRUPTOR MANUAL NA");
     }
+  }
+
+  // Comandos directos en Modo App
+  if (String(topic) == TOPIC_COMMAND && modoActual == MODO_APP) {
+    if (msg == "ON") encenderFoco(true);
+    else if (msg == "OFF") encenderFoco(false);
   }
 }
 
 void reconnect() {
   while (!client.connected()) {
-    Serial.print("Intentando conexión MQTT a la nube...");
+    Serial.print("Conectando a MQTT Broker...");
     String clientId = "ESP32_Domotica_" + String(random(0xffff), HEX);
 
-    // Conectar con Last Will & Testament (LWT) para avisar si se desconecta
     if (client.connect(clientId.c_str(), TOPIC_AVAILABILITY, 1, true, "offline")) {
-      Serial.println("¡Conectado al Broker!");
-      
-      // Notificar a la app que el ESP32 está ONLINE
+      Serial.println("¡Conectado!");
       client.publish(TOPIC_AVAILABILITY, "online", true);
 
-      // Suscribirse al topic de comandos de la App
+      // Suscribirse a tópicos de comando y modo
       client.subscribe(TOPIC_COMMAND);
-      
-      // Enviar estado inicial del relé
-      client.publish(TOPIC_STATE, "OFF", true);
+      client.subscribe(TOPIC_MODE);
+
+      // Reportar estado inicial
+      client.publish(TOPIC_STATE, focoEncendido ? "ON" : "OFF", true);
+      client.publish(TOPIC_MODE, "APP", true);
     } else {
-      Serial.print("Error rc=");
-      Serial.print(client.state());
-      Serial.println(". Reintentando en 5 segundos...");
-      delay(5000);
+      delay(4000);
     }
   }
 }
@@ -120,12 +141,14 @@ void reconnect() {
 void setup() {
   Serial.begin(115200);
 
-  // Configurar pin del relé como salida
+  // Configurar pines
   pinMode(RELAY_PIN, OUTPUT);
-  digitalWrite(RELAY_PIN, RELAY_OFF); // Iniciar apagado
+  digitalWrite(RELAY_PIN, RELAY_OFF);
+
+  // Switch físico normalmente abierto conectado a GND con resistencia pull-up interna
+  pinMode(MANUAL_SWITCH_PIN, INPUT_PULLUP);
 
   setup_wifi();
-
   client.setServer(mqtt_server, mqtt_port);
   client.setCallback(callback);
 }
@@ -134,7 +157,36 @@ void loop() {
   if (!client.connected()) {
     reconnect();
   }
-  client.loop(); // Mantiene viva la conexión y escucha mensajes
+  client.loop();
+
+  // 1. MODO INTELIGENTE: Sensor de luz (Fotocélula LDR)
+  if (modoActual == MODO_FOTOCELULA) {
+    // Leer cada 1.5 segundos
+    if (millis() - ultimoSensorMillis > 1500) {
+      ultimoSensorMillis = millis();
+      int lecturaAnalogica = analogRead(LDR_PIN); // 0 a 4095
+      // Calcular porcentaje de luz (ajustar según tu circuito LDR)
+      float porcentajeLuz = map(lecturaAnalogica, 0, 4095, 0, 100);
+
+      char bufferLuz[8];
+      dtostrf(porcentajeLuz, 1, 0, bufferLuz);
+      client.publish(TOPIC_LIGHT_SENSOR, bufferLuz, false);
+
+      // Si hay poca luz (< 40%), enciende; si hay mucha luz (>= 40%), apaga
+      if (porcentajeLuz < 40.0) {
+        encenderFoco(true);
+      } else {
+        encenderFoco(false);
+      }
+    }
+  }
+
+  // 2. MODO MANUAL: Interruptor Normalmente Abierto (NA)
+  else if (modoActual == MODO_MANUAL) {
+    // Al usar INPUT_PULLUP: LOW = pulsado/cerrado, HIGH = abierto/reposo
+    bool switchPresionado = (digitalRead(MANUAL_SWITCH_PIN) == LOW);
+    encenderFoco(switchPresionado);
+  }
 }
 ''';
 
@@ -158,7 +210,7 @@ void loop() {
                     Icon(Icons.code_rounded, color: Color(0xFF10B981), size: 24),
                     SizedBox(width: 10),
                     Text(
-                      'Código y Conexión ESP32',
+                      'Código ESP32 (3 Modos)',
                       style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w700,
@@ -175,7 +227,7 @@ void loop() {
             ),
             const SizedBox(height: 8),
             Text(
-              'Este código en C++ para Arduino IDE / PlatformIO se sincroniza automáticamente con los topics configurados en esta app.',
+              'Este código incluye los 3 modos: App, Fotocélula LDR e Interruptor NA físico.',
               style: TextStyle(
                 fontSize: 12,
                 color: Colors.white.withValues(alpha: 0.6),
@@ -195,7 +247,7 @@ void loop() {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Esquema de Pines (ESP32 <-> Relé):',
+                    'Pines del ESP32:',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
@@ -204,10 +256,10 @@ void loop() {
                   ),
                   SizedBox(height: 6),
                   Text(
-                    '• ESP32 VIN / 5V  -> VCC del Módulo Relé\n'
-                    '• ESP32 GND      -> GND del Módulo Relé\n'
-                    '• ESP32 GPIO 23   -> IN del Módulo Relé\n'
-                    '• Foco 110/220V   -> Conectado en serie con COM y NO del Relé',
+                    '• GPIO 23 -> Pin IN del Módulo Relé (Foco)\n'
+                    '• GPIO 34 -> Fotocélula / LDR (Pin analógico de luz)\n'
+                    '• GPIO 4  -> Interruptor físico Normalmente Abierto (a GND)\n'
+                    '• VIN / GND -> Alimentación 5V y Tierra común',
                     style: TextStyle(
                       fontSize: 11,
                       height: 1.5,

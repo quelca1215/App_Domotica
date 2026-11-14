@@ -2,11 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/home_automation_provider.dart';
-import '../widgets/esp32_connection_badge.dart';
 import '../widgets/esp32_guide_dialog.dart';
 import '../widgets/immersive_room_view.dart';
-import '../widgets/quick_metrics_bar.dart';
-import '../widgets/relay_status_card.dart';
+import '../widgets/operating_modes_card.dart';
 import '../widgets/settings_sheet.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -50,7 +48,7 @@ class HomeScreen extends StatelessWidget {
               child: CustomScrollView(
                 physics: const BouncingScrollPhysics(),
                 slivers: [
-                  // App Bar Superior Personalizada
+                  // Barra Superior Minimalista
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
@@ -80,7 +78,7 @@ class HomeScreen extends StatelessWidget {
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       const Text(
-                                        'Domótica ESP32',
+                                        'Casa Inteligente',
                                         style: TextStyle(
                                           fontSize: 17,
                                           fontWeight: FontWeight.w800,
@@ -101,7 +99,7 @@ class HomeScreen extends StatelessWidget {
                                               ),
                                             ),
                                           ),
-                                          const SizedBox(width: 4),
+                                          const SizedBox(width: 5),
                                           Container(
                                             width: 4,
                                             height: 4,
@@ -110,7 +108,7 @@ class HomeScreen extends StatelessWidget {
                                               color: Colors.white38,
                                             ),
                                           ),
-                                          const SizedBox(width: 4),
+                                          const SizedBox(width: 5),
                                           Text(
                                             provider.config.useSimulation
                                                 ? 'Virtual'
@@ -135,10 +133,10 @@ class HomeScreen extends StatelessWidget {
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              // Botón de Código y Guía ESP32
+                              // Botón Guía ESP32
                               IconButton(
                                 onPressed: () => _openEsp32Guide(context),
-                                tooltip: 'Ver Código Arduino ESP32',
+                                tooltip: 'Código y Pines ESP32',
                                 style: IconButton.styleFrom(
                                   backgroundColor: const Color(0xFF1E293B),
                                   shape: RoundedRectangleBorder(
@@ -154,11 +152,11 @@ class HomeScreen extends StatelessWidget {
                                   size: 20,
                                 ),
                               ),
-                              const SizedBox(width: 8),
-                              // Botón de Ajustes y Servidor
+                              const SizedBox(width: 6),
+                              // Botón Ajustes
                               IconButton(
                                 onPressed: () => _openSettings(context),
-                                tooltip: 'Ajustes de Red y Broker',
+                                tooltip: 'Ajustes del Broker',
                                 style: IconButton.styleFrom(
                                   backgroundColor: const Color(0xFF1E293B),
                                   shape: RoundedRectangleBorder(
@@ -181,24 +179,10 @@ class HomeScreen extends StatelessWidget {
                     ),
                   ),
 
-                  // Estado de Conexión ESP32 en la Nube
+                  // Interfaz Inmersiva del Cuarto (Foco y Lámpara)
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-                      child: ESP32ConnectionBadge(
-                        status: provider.connectionStatus,
-                        isESP32Available: provider.isESP32Available,
-                        config: provider.config,
-                        onTap: () => _openSettings(context),
-                        onReconnect: () => provider.reconnect(),
-                      ),
-                    ),
-                  ),
-
-                  // Interfaz Inmersiva del Cuarto
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
                       child: ImmersiveRoomView(
                         isLightOn: isLightOn,
                         onToggle: () {
@@ -209,30 +193,22 @@ class HomeScreen extends StatelessWidget {
                     ),
                   ),
 
-                  // Barra de Métricas Rápidas
+                  // Parte Final: Opciones de los 3 Modos de Operación
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: QuickMetricsBar(
-                        telemetry: provider.telemetry,
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                      child: OperatingModesCard(
+                        currentMode: provider.operatingMode,
                         isLightOn: isLightOn,
+                        ambientLightLevel: provider.ambientLightLevel,
+                        isManualSwitchClosed: provider.isManualSwitchClosed,
                         formattedRuntime: provider.formattedRuntime,
-                      ),
-                    ),
-                  ),
-
-                  // Tarjeta de Control Físico del Relé
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-                      child: RelayStatusCard(
-                        isLightOn: isLightOn,
-                        relayState: provider.relayState,
-                        isESP32Available: provider.isESP32Available,
-                        onToggle: () {
-                          HapticFeedback.heavyImpact();
-                          provider.toggleLight();
-                        },
+                        onModeChanged: (mode) => provider.setOperatingMode(mode),
+                        onToggleLight: () => provider.toggleLight(),
+                        onLightLevelChanged: (level) =>
+                            provider.setAmbientLightLevel(level),
+                        onManualSwitchChanged: (isClosed) =>
+                            provider.setManualSwitch(isClosed),
                       ),
                     ),
                   ),

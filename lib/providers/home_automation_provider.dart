@@ -12,10 +12,12 @@ class HomeAutomationProvider extends ChangeNotifier {
   bool _isLightOn = false;
   ESP32ConnectionStatus _connectionStatus = ESP32ConnectionStatus.disconnected;
   String? _connectionError;
-  bool _isESP32Available = false; // Se activa cuando el ESP32 envía status o LWT online
+  bool _isESP32Available = false;
   DeviceTelemetry _telemetry = DeviceTelemetry(lastSeen: DateTime.now());
   MqttConfig _config = const MqttConfig();
   bool _isInitialized = false;
+
+  OperatingMode _operatingMode = OperatingMode.app;
 
   Timer? _runtimeTimer;
   int _secondsOn = 0;
@@ -34,6 +36,9 @@ class HomeAutomationProvider extends ChangeNotifier {
   bool get isInitialized => _isInitialized;
   int get secondsOn => _secondsOn;
   List<String> get eventLogs => List.unmodifiable(_eventLogs);
+  OperatingMode get operatingMode => _operatingMode;
+  double get ambientLightLevel => _telemetry.ambientLightLevel;
+  bool get isManualSwitchClosed => _telemetry.isManualSwitchClosed;
 
   String get formattedRuntime {
     final minutes = (_secondsOn ~/ 60).toString().padLeft(2, '0');
@@ -63,6 +68,33 @@ class HomeAutomationProvider extends ChangeNotifier {
       _telemetry = DeviceTelemetry.fromJson(data);
       _addLog('Telemetría recibida: ${_telemetry.temperature}°C, ${_telemetry.humidity}%');
       notifyListeners();
+    };
+
+    _mqttService.onOperatingModeReceived = (OperatingMode mode) {
+      _operatingMode = mode;
+      _addLog('Modo actualizado por ESP32: ${_modeName(mode)}');
+      _applyCurrentModeLogic();
+      notifyListeners();
+    };
+
+    _mqttService.onLightSensorReceived = (double level) {
+      _telemetry = _telemetry.copyWith(ambientLightLevel: level);
+      _addLog('Fotocélula (Sensor de Luz): ${level.toStringAsFixed(0)}%');
+      if (_operatingMode == OperatingMode.photocell) {
+        _applyCurrentModeLogic();
+      } else {
+        notifyListeners();
+      }
+    };
+
+    _mqttService.onManualSwitchReceived = (bool isClosed) {
+      _telemetry = _telemetry.copyWith(isManualSwitchClosed: isClosed);
+      _addLog('Interruptor NA: ${isClosed ? "CERRADO (Accionado)" : "ABIERTO (Reposo)"}');
+      if (_operatingMode == OperatingMode.manual) {
+        _applyCurrentModeLogic();
+      } else {
+        notifyListeners();
+      }
     };
 
     _mqttService.onConnectionStatusChanged = (status, error) {
@@ -103,7 +135,7 @@ class HomeAutomationProvider extends ChangeNotifier {
     _connectionStatus = ESP32ConnectionStatus.online;
     _isESP32Available = true;
 
-    // Simular telemetría cada 8 segundos con pequeñas variaciones naturales
+    // Simular telemetría periódica
     _simulationTelemetryTimer?.cancel();
     _simulationTelemetryTimer = Timer.periodic(const Duration(seconds: 8), (_) {
       if (!_config.useSimulation) return;
@@ -123,8 +155,72 @@ class HomeAutomationProvider extends ChangeNotifier {
     });
   }
 
+  Future<void> setOperatingMode(OperatingMode mode) async {
+    if (_operatingMode == mode) return;
+
+    _operatingMode = mode;
+    _addLog('Modo cambiado a: ${_modeName(mode)}');
+
+    if (!_config.useSimulation) {
+      await _mqttService.publishOperatingMode(mode);
+    }
+
+    _applyCurrentModeLogic();
+    notifyListeners();
+  }
+
+  void _applyCurrentModeLogic() {
+    switch (_operatingMode) {
+      case OperatingMode.app:
+        // Mantiene el estado manual establecido por el usuario
+        break;
+      case OperatingMode.photocell:
+        // Si hay poca luz (< 40%), se prende el foco; si hay mucha luz (>= 40%), se apaga
+        final shouldTurnOn = _telemetry.ambientLightLevel < 40.0;
+        setLight(shouldTurnOn);
+        break;
+      case OperatingMode.manual:
+        // Sigue el estado del interruptor físico normalmente abierto
+        setLight(_telemetry.isManualSwitchClosed);
+        break;
+    }
+  }
+
+  void setAmbientLightLevel(double level) {
+    final clamped = level.clamp(0.0, 100.0);
+    _telemetry = _telemetry.copyWith(ambientLightLevel: clamped);
+    _addLog('Luz ambiental ajustada: ${clamped.toStringAsFixed(0)}%');
+
+    if (_operatingMode == OperatingMode.photocell) {
+      final shouldTurnOn = clamped < 40.0;
+      setLight(shouldTurnOn);
+    } else {
+      notifyListeners();
+    }
+  }
+
+  void setManualSwitch(bool isClosed) {
+    _telemetry = _telemetry.copyWith(isManualSwitchClosed: isClosed);
+    _addLog('Interruptor NA: ${isClosed ? "PRESIONADO (Cerrado)" : "SUELTO (Abierto)"}');
+
+    if (_operatingMode == OperatingMode.manual) {
+      setLight(isClosed);
+    } else {
+      notifyListeners();
+    }
+  }
+
   Future<void> toggleLight() async {
-    await setLight(!_isLightOn);
+    if (_operatingMode == OperatingMode.app) {
+      await setLight(!_isLightOn);
+    } else if (_operatingMode == OperatingMode.photocell) {
+      // En modo fotocélula, conmutar simula cambiar entre ambiente oscuro (20%) y luminoso (80%)
+      final newLevel = _telemetry.ambientLightLevel < 40.0 ? 80.0 : 20.0;
+      setAmbientLightLevel(newLevel);
+    } else if (_operatingMode == OperatingMode.manual) {
+      // En modo manual, conmuta el interruptor físico normalmente abierto
+      setManualSwitch(!_telemetry.isManualSwitchClosed);
+    }
   }
 
   Future<void> setLight(bool turnOn) async {
@@ -201,6 +297,17 @@ class HomeAutomationProvider extends ChangeNotifier {
       notifyListeners();
     } else {
       await _connectMqtt();
+    }
+  }
+
+  String _modeName(OperatingMode mode) {
+    switch (mode) {
+      case OperatingMode.app:
+        return 'Control App';
+      case OperatingMode.photocell:
+        return 'Fotocélula (Inteligente)';
+      case OperatingMode.manual:
+        return 'Interruptor NA (Manual)';
     }
   }
 

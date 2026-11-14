@@ -17,33 +17,6 @@ class QuickMetricsBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        // Potencia instantánea
-        Expanded(
-          child: _MetricCard(
-            label: 'Consumo',
-            value: isLightOn
-                ? '${telemetry.powerWatts.toStringAsFixed(1)} W'
-                : '0.0 W',
-            subtitle: isLightOn ? 'Foco LED 12W' : 'En reposo',
-            icon: Icons.bolt_rounded,
-            accentColor: isLightOn
-                ? const Color(0xFFFFB300)
-                : const Color(0xFF64748B),
-          ),
-        ),
-        const SizedBox(width: 10),
-
-        // Temperatura del cuarto
-        Expanded(
-          child: _MetricCard(
-            label: 'Temperatura',
-            value: '${telemetry.temperature.toStringAsFixed(1)} °C',
-            subtitle: 'Confort térmico',
-            icon: Icons.thermostat_rounded,
-            accentColor: const Color(0xFF38BDF8),
-          ),
-        ),
-        const SizedBox(width: 10),
 
         // Tiempo encendido
         Expanded(
