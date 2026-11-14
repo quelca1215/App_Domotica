@@ -9,9 +9,6 @@ class OperatingModesCard extends StatelessWidget {
   final bool isManualSwitchClosed;
   final String formattedRuntime;
   final ValueChanged<OperatingMode> onModeChanged;
-  final VoidCallback onToggleLight;
-  final ValueChanged<double> onLightLevelChanged;
-  final ValueChanged<bool> onManualSwitchChanged;
 
   const OperatingModesCard({
     super.key,
@@ -21,121 +18,53 @@ class OperatingModesCard extends StatelessWidget {
     required this.isManualSwitchClosed,
     required this.formattedRuntime,
     required this.onModeChanged,
-    required this.onToggleLight,
-    required this.onLightLevelChanged,
-    required this.onManualSwitchChanged,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
       decoration: BoxDecoration(
-        color: const Color(0xFF131B2E),
-        borderRadius: BorderRadius.circular(26),
+        color: const Color(0xFF0F172A).withValues(alpha: 0.8),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.08),
-          width: 1.2,
+          color: Colors.white.withValues(alpha: 0.07),
+          width: 1.0,
         ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.35),
-            blurRadius: 24,
-            offset: const Offset(0, 10),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Encabezado
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.tune_rounded,
-                      color: Color(0xFF38BDF8),
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    const Expanded(
-                      child: Text(
-                        'Modos de Operación',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                          letterSpacing: 0.2,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              if (isLightOn)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFB300).withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: const Color(0xFFFFB300).withValues(alpha: 0.4),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.timer_outlined,
-                        size: 13,
-                        color: Color(0xFFFFD54F),
-                      ),
-                      const SizedBox(width: 5),
-                      Text(
-                        formattedRuntime,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFFFFD54F),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-
-          const SizedBox(height: 16),
-
-          // Selector Segmentado de Modos (Minimalista y Moderno)
+          // Selector Segmentado de Modos (Ultra limpio y minimalista)
           Container(
-            padding: const EdgeInsets.all(4),
+            padding: const EdgeInsets.all(3),
             decoration: BoxDecoration(
-              color: const Color(0xFF0A0F1D),
-              borderRadius: BorderRadius.circular(18),
+              color: const Color(0xFF070B14),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: Colors.white.withValues(alpha: 0.05),
               ),
             ),
             child: Row(
               children: [
-                _buildModeTab(
+                _buildTab(
                   mode: OperatingMode.app,
                   title: 'App',
                   icon: Icons.smartphone_rounded,
                 ),
-                _buildModeTab(
+                _buildTab(
                   mode: OperatingMode.photocell,
                   title: 'Fotocélula',
                   icon: Icons.light_mode_rounded,
                 ),
-                _buildModeTab(
+                _buildTab(
                   mode: OperatingMode.manual,
                   title: 'Manual NA',
                   icon: Icons.power_rounded,
@@ -144,21 +73,21 @@ class OperatingModesCard extends StatelessWidget {
             ),
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
 
-          // Contenido dinámico según el modo seleccionado
+          // Estado del modo activo (Limpio y puramente informativo)
           AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
+            duration: const Duration(milliseconds: 260),
             switchInCurve: Curves.easeOutCubic,
             switchOutCurve: Curves.easeInCubic,
-            child: _buildModeContent(),
+            child: _buildCurrentState(),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildModeTab({
+  Widget _buildTab({
     required OperatingMode mode,
     required String title,
     required IconData icon,
@@ -173,49 +102,40 @@ class OperatingModesCard extends StatelessWidget {
         },
         behavior: HitTestBehavior.opaque,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 250),
-          padding: const EdgeInsets.symmetric(vertical: 10),
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(
-            color: isSelected
-                ? const Color(0xFF1E293B)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(14),
+            color: isSelected ? const Color(0xFF1E293B) : Colors.transparent,
+            borderRadius: BorderRadius.circular(13),
             border: isSelected
                 ? Border.all(
-                    color: const Color(0xFF38BDF8).withValues(alpha: 0.5),
-                    width: 1.2,
+                    color: const Color(0xFF38BDF8).withValues(alpha: 0.35),
                   )
                 : null,
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: const Color(0xFF38BDF8).withValues(alpha: 0.15),
-                      blurRadius: 10,
-                    ),
-                  ]
-                : null,
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
                 icon,
-                size: 18,
+                size: 15,
                 color: isSelected
                     ? const Color(0xFF38BDF8)
                     : Colors.white.withValues(alpha: 0.4),
               ),
-              const SizedBox(height: 4),
-              Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                  color: isSelected
-                      ? Colors.white
-                      : Colors.white.withValues(alpha: 0.5),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                    color: isSelected
+                        ? Colors.white
+                        : Colors.white.withValues(alpha: 0.5),
+                  ),
                 ),
               ),
             ],
@@ -225,467 +145,302 @@ class OperatingModesCard extends StatelessWidget {
     );
   }
 
-  Widget _buildModeContent() {
+  Widget _buildCurrentState() {
     switch (currentMode) {
       case OperatingMode.app:
-        return _buildAppModeContent();
+        return _buildAppModeState();
       case OperatingMode.photocell:
-        return _buildPhotocellModeContent();
+        return _buildPhotocellModeState();
       case OperatingMode.manual:
-        return _buildManualModeContent();
+        return _buildManualModeState();
     }
   }
 
-  // --- 1. MODO ENCENDIDO CON LA APP ---
-  Widget _buildAppModeContent() {
-    return Column(
-      key: const ValueKey('app_mode'),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    '1. Modo Encendido con la App',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    isLightOn
-                        ? 'Foco encendido desde la app'
-                        : 'Foco apagado desde la app',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.white.withValues(alpha: 0.5),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Switch(
-              value: isLightOn,
-              activeThumbColor: const Color(0xFFFFB300),
-              activeTrackColor: const Color(0xFFFFB300).withValues(alpha: 0.3),
-              onChanged: (_) {
-                HapticFeedback.mediumImpact();
-                onToggleLight();
-              },
-            ),
-          ],
+  // --- 1. MODO APP: Solo estado y aviso de tocar la habitación ---
+  Widget _buildAppModeState() {
+    return Container(
+      key: const ValueKey('app_state'),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF070B14).withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isLightOn
+              ? const Color(0xFFFFB300).withValues(alpha: 0.25)
+              : Colors.white.withValues(alpha: 0.04),
         ),
-        const SizedBox(height: 16),
-        SizedBox(
-          width: double.infinity,
-          height: 52,
-          child: ElevatedButton.icon(
-            onPressed: () {
-              HapticFeedback.heavyImpact();
-              onToggleLight();
-            },
-            icon: Icon(
-              isLightOn ? Icons.power_settings_new_rounded : Icons.flash_on_rounded,
-              size: 20,
-            ),
-            label: Text(
-              isLightOn ? 'APAGAR FOCO' : 'ENCENDER FOCO',
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: isLightOn
-                  ? const Color(0xFFEF4444)
-                  : const Color(0xFF0284C7),
-              foregroundColor: Colors.white,
-              elevation: 4,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
+      ),
+      child: Row(
+        children: [
+          // Indicador luminoso con halo
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isLightOn
+                  ? const Color(0xFFFFB300)
+                  : const Color(0xFF64748B),
+              boxShadow: isLightOn
+                  ? [
+                      BoxShadow(
+                        color: const Color(0xFFFFB300).withValues(alpha: 0.6),
+                        blurRadius: 8,
+                        spreadRadius: 1,
+                      ),
+                    ]
+                  : null,
             ),
           ),
-        ),
-      ],
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        isLightOn ? 'FOCO ENCENDIDO' : 'FOCO APAGADO',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.4,
+                          color: isLightOn
+                              ? const Color(0xFFFFD54F)
+                              : const Color(0xFF94A3B8),
+                        ),
+                      ),
+                    ),
+                    if (isLightOn) ...[
+                      const SizedBox(width: 8),
+                      Text(
+                        formattedRuntime,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFFFFD54F),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Toca la habitación para alternar el foco',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.white.withValues(alpha: 0.5),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  // --- 2. MODO INTELIGENTE CON FOTOCÉLULA ---
-  Widget _buildPhotocellModeContent() {
+  // --- 2. MODO FOTOCÉLULA: Nivel de luz ambiental y umbral de cambio ---
+  Widget _buildPhotocellModeState() {
     final isDark = ambientLightLevel < 40.0;
 
-    return Column(
-      key: const ValueKey('photocell_mode'),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '2. Modo Inteligente (Fotocélula)',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    ),
-                  ),
-                  SizedBox(height: 2),
-                  Text(
-                    'Sensor LDR automático de luz',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.white54,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: isDark
-                    ? const Color(0xFF10B981).withValues(alpha: 0.18)
-                    : const Color(0xFF64748B).withValues(alpha: 0.18),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: isDark
-                      ? const Color(0xFF10B981).withValues(alpha: 0.4)
-                      : Colors.white12,
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    isDark ? Icons.nightlight_round : Icons.wb_sunny_rounded,
-                    size: 13,
-                    color: isDark ? const Color(0xFF34D399) : const Color(0xFFFBBF24),
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    isDark ? 'Poca Luz' : 'Mucha Luz',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
+    return Container(
+      key: const ValueKey('photocell_state'),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF070B14).withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark
+              ? const Color(0xFF10B981).withValues(alpha: 0.25)
+              : Colors.white.withValues(alpha: 0.04),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Icon(
+                      isDark ? Icons.nightlight_round : Icons.wb_sunny_rounded,
+                      size: 14,
                       color: isDark ? const Color(0xFF34D399) : const Color(0xFFFBBF24),
                     ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-
-        const SizedBox(height: 14),
-
-        // Tarjeta de estado de la fotocélula
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: const Color(0xFF0F172A),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isDark
-                  ? const Color(0xFF10B981).withValues(alpha: 0.3)
-                  : Colors.white.withValues(alpha: 0.05),
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Luz Ambiental Detectada:',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.white.withValues(alpha: 0.6),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '${ambientLightLevel.toStringAsFixed(0)}%',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: LinearProgressIndicator(
-                  value: ambientLightLevel / 100.0,
-                  minHeight: 8,
-                  backgroundColor: const Color(0xFF1E293B),
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    isDark ? const Color(0xFF10B981) : const Color(0xFFFBBF24),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Icon(
-                    isDark ? Icons.check_circle_rounded : Icons.info_outline_rounded,
-                    size: 14,
-                    color: isDark ? const Color(0xFF34D399) : const Color(0xFF94A3B8),
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      isDark
-                          ? 'Oscuridad detectada (< 40%) ➔ Foco ENCENDIDO'
-                          : 'Luz detectada (≥ 40%) ➔ Foco APAGADO',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: isDark
-                            ? const Color(0xFF34D399)
-                            : Colors.white.withValues(alpha: 0.7),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 12),
-
-        // Botones rápidos para simular o probar la fotocélula
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  HapticFeedback.selectionClick();
-                  onLightLevelChanged(20.0);
-                },
-                icon: const Icon(Icons.nightlight_round, size: 15),
-                label: const Text('Noche (20%)', style: TextStyle(fontSize: 11)),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF38BDF8),
-                  side: BorderSide(
-                    color: isDark
-                        ? const Color(0xFF38BDF8)
-                        : Colors.white.withValues(alpha: 0.15),
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  HapticFeedback.selectionClick();
-                  onLightLevelChanged(80.0);
-                },
-                icon: const Icon(Icons.wb_sunny_rounded, size: 15),
-                label: const Text('Día (80%)', style: TextStyle(fontSize: 11)),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFFFBBF24),
-                  side: BorderSide(
-                    color: !isDark
-                        ? const Color(0xFFFBBF24)
-                        : Colors.white.withValues(alpha: 0.15),
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  // --- 3. MODO MANUAL CON INTERRUPTOR NORMALMENTE ABIERTO (NA) ---
-  Widget _buildManualModeContent() {
-    return Column(
-      key: const ValueKey('manual_mode'),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '3. Modo Manual (Interruptor NA)',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    ),
-                  ),
-                  SizedBox(height: 2),
-                  Text(
-                    'Pulsador o switch normalmente abierto',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.white54,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: isManualSwitchClosed
-                    ? const Color(0xFF10B981).withValues(alpha: 0.18)
-                    : const Color(0xFFEF4444).withValues(alpha: 0.18),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: isManualSwitchClosed
-                      ? const Color(0xFF10B981).withValues(alpha: 0.4)
-                      : const Color(0xFFEF4444).withValues(alpha: 0.4),
-                ),
-              ),
-              child: Text(
-                isManualSwitchClosed ? 'CERRADO (Activo)' : 'ABIERTO (Reposo)',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: isManualSwitchClosed
-                      ? const Color(0xFF34D399)
-                      : const Color(0xFFF87171),
-                ),
-              ),
-            ),
-          ],
-        ),
-
-        const SizedBox(height: 14),
-
-        // Tarjeta esquemática del switch NA
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: const Color(0xFF0F172A),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isManualSwitchClosed
-                  ? const Color(0xFF10B981).withValues(alpha: 0.3)
-                  : Colors.white.withValues(alpha: 0.05),
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: isManualSwitchClosed
-                      ? const Color(0xFF10B981).withValues(alpha: 0.2)
-                      : const Color(0xFF1E293B),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  isManualSwitchClosed
-                      ? Icons.radio_button_checked_rounded
-                      : Icons.radio_button_unchecked_rounded,
-                  color: isManualSwitchClosed
-                      ? const Color(0xFF34D399)
-                      : const Color(0xFF94A3B8),
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      isManualSwitchClosed
-                          ? 'Circuito Manual Cerrado'
-                          : 'Circuito Manual Abierto',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: isManualSwitchClosed
-                            ? const Color(0xFF34D399)
-                            : Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      isManualSwitchClosed
-                          ? 'El interruptor de pared conduce corriente ➔ Foco ON'
-                          : 'El interruptor en reposo corta el paso ➔ Foco OFF',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.white.withValues(alpha: 0.55),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Luz: ${ambientLightLevel.toStringAsFixed(0)}%',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? const Color(0xFF10B981).withValues(alpha: 0.15)
+                      : const Color(0xFF64748B).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  isDark ? 'Foco ON' : 'Foco OFF',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: isDark ? const Color(0xFF34D399) : const Color(0xFF94A3B8),
+                  ),
+                ),
+              ),
             ],
           ),
-        ),
-
-        const SizedBox(height: 14),
-
-        // Botón interactivo para pulsar/conmutar el interruptor NA
-        SizedBox(
-          width: double.infinity,
-          height: 50,
-          child: ElevatedButton.icon(
-            onPressed: () {
-              HapticFeedback.mediumImpact();
-              onManualSwitchChanged(!isManualSwitchClosed);
-            },
-            icon: Icon(
-              isManualSwitchClosed
-                  ? Icons.power_settings_new_rounded
-                  : Icons.touch_app_rounded,
-              size: 18,
-            ),
-            label: Text(
-              isManualSwitchClosed
-                  ? 'SOLTAR / ABRIR INTERRUPTOR NA'
-                  : 'PULSAR / CERRAR INTERRUPTOR NA',
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: isManualSwitchClosed
-                  ? const Color(0xFF334155)
-                  : const Color(0xFF0D9488),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+          const SizedBox(height: 8),
+          // Barra delgada de nivel de luz ambiental
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: ambientLightLevel / 100.0,
+              minHeight: 5,
+              backgroundColor: const Color(0xFF1E293B),
+              valueColor: AlwaysStoppedAnimation<Color>(
+                isDark ? const Color(0xFF10B981) : const Color(0xFFFBBF24),
               ),
             ),
           ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  isDark
+                      ? 'Luz baja ➔ Encendido auto'
+                      : 'Luz natural ➔ Apagado auto',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.white.withValues(alpha: 0.55),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Umbral: 40%',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: Colors.white.withValues(alpha: 0.4),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- 3. MODO MANUAL NA: Estado real del interruptor físico en pared ---
+  Widget _buildManualModeState() {
+    return Container(
+      key: const ValueKey('manual_state'),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF070B14).withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isManualSwitchClosed
+              ? const Color(0xFF10B981).withValues(alpha: 0.25)
+              : Colors.white.withValues(alpha: 0.04),
         ),
-      ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isManualSwitchClosed
+                  ? const Color(0xFF10B981)
+                  : const Color(0xFF64748B),
+              boxShadow: isManualSwitchClosed
+                  ? [
+                      BoxShadow(
+                        color: const Color(0xFF10B981).withValues(alpha: 0.6),
+                        blurRadius: 8,
+                        spreadRadius: 1,
+                      ),
+                    ]
+                  : null,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        isManualSwitchClosed
+                            ? 'INTERRUPTOR CERRADO'
+                            : 'INTERRUPTOR ABIERTO (NA)',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.3,
+                          color: isManualSwitchClosed
+                              ? const Color(0xFF34D399)
+                              : const Color(0xFF94A3B8),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      isManualSwitchClosed ? 'Foco ON' : 'Foco OFF',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: isManualSwitchClosed
+                            ? const Color(0xFF34D399)
+                            : const Color(0xFF94A3B8),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'El circuito responde al pulsador físico en la pared',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.white.withValues(alpha: 0.5),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

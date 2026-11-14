@@ -13,7 +13,7 @@ void main() {
   });
 
   testWidgets(
-      'Domotica App test - renderiza cuarto inmersivo y los 3 modos de operacion',
+      'Domotica App test - interfaz minimalista con control tactil en cuarto y 3 modos',
       (WidgetTester tester) async {
     tester.view.physicalSize = const Size(1080, 2400);
     tester.view.devicePixelRatio = 3.0;
@@ -22,38 +22,39 @@ void main() {
     await tester.pumpWidget(const DomoticaApp());
     await tester.pumpAndSettle();
 
-    // 1. Verificar encabezado y cuarto
+    // 1. Verificar encabezado limpio y cuarto
     expect(find.text('Casa Inteligente'), findsOneWidget);
     expect(find.text('Dormitorio Principal'), findsOneWidget);
     expect(find.byType(ImmersiveRoomView), findsOneWidget);
     expect(find.byType(OperatingModesCard), findsOneWidget);
 
-    // 2. Verificar Modo 1: Encendido con la app
-    expect(find.text('1. Modo Encendido con la App'), findsOneWidget);
-    expect(find.text('ENCENDER FOCO'), findsOneWidget);
+    // 2. Modo 1: App activo por defecto
+    expect(find.text('FOCO APAGADO'), findsOneWidget);
+    expect(find.text('Toca la habitación para alternar el foco'), findsOneWidget);
 
-    // Encender foco con el botón de la app
-    await tester.tap(find.text('ENCENDER FOCO'));
+    // Encender foco tocando directamente la habitación
+    await tester.tap(find.byType(ImmersiveRoomView));
     await tester.pumpAndSettle();
-    expect(find.text('APAGAR FOCO'), findsOneWidget);
+    expect(find.text('FOCO ENCENDIDO'), findsOneWidget);
 
-    // 3. Probar cambio a Modo 2: Fotocélula (Inteligente)
+    // 3. Cambiar a Modo 2: Fotocélula
     await tester.tap(find.text('Fotocélula'));
     await tester.pumpAndSettle();
-    expect(find.text('2. Modo Inteligente (Fotocélula)'), findsOneWidget);
-    expect(find.text('Luz Ambiental Detectada:'), findsOneWidget);
+    expect(find.textContaining('Luz:'), findsOneWidget);
+    expect(find.text('Umbral: 40%'), findsOneWidget);
 
-    // 4. Probar cambio a Modo 3: Manual con Interruptor NA
+    // 4. Cambiar a Modo 3: Manual NA
     await tester.tap(find.text('Manual NA'));
     await tester.pumpAndSettle();
-    expect(find.text('3. Modo Manual (Interruptor NA)'), findsOneWidget);
-    expect(find.text('PULSAR / CERRAR INTERRUPTOR NA'), findsOneWidget);
+    expect(find.text('INTERRUPTOR ABIERTO (NA)'), findsOneWidget);
+    expect(
+      find.text('El circuito responde al pulsador físico en la pared'),
+      findsOneWidget,
+    );
 
-    // Asegurar visibilidad en scroll y pulsar interruptor manual
-    await tester.ensureVisible(find.text('PULSAR / CERRAR INTERRUPTOR NA'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('PULSAR / CERRAR INTERRUPTOR NA'));
-    await tester.pumpAndSettle();
-    expect(find.text('SOLTAR / ABRIR INTERRUPTOR NA'), findsOneWidget);
+    // Tocar el cuarto en modo manual -> muestra aviso informativo
+    await tester.tap(find.byType(ImmersiveRoomView));
+    await tester.pump();
+    expect(find.byType(SnackBar), findsOneWidget);
   });
 }

@@ -21,7 +21,7 @@ class ImmersiveRoomView extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 700),
         curve: Curves.easeInOutCubic,
-        height: isCompact ? 300 : 360,
+        height: isCompact ? 430 : 490,
         width: double.infinity,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(28),
@@ -300,12 +300,12 @@ class _LightConePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final width = size.width;
     final height = size.height;
-    final lightSource = Offset(width / 2, 72);
+    final lightSource = Offset(width / 2, 86);
 
     // Gran resplandor radial
     final ambientGlowPaint = Paint()
       ..shader = RadialGradient(
-        center: const Alignment(0, -0.65),
+        center: const Alignment(0, -0.62),
         radius: 1.1,
         colors: [
           const Color(0xFFFFD54F).withValues(alpha: 0.42),
@@ -461,7 +461,7 @@ class _HangingBulbWidget extends StatelessWidget {
         // Cable colgante desde el techo
         Container(
           width: 3,
-          height: 38,
+          height: 52,
           decoration: BoxDecoration(
             color: const Color(0xFF1A1A1A),
             boxShadow: [

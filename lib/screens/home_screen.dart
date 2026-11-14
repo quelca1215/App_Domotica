@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import '../models/device_state.dart';
 import '../providers/home_automation_provider.dart';
-import '../widgets/esp32_guide_dialog.dart';
 import '../widgets/immersive_room_view.dart';
 import '../widgets/operating_modes_card.dart';
 import '../widgets/settings_sheet.dart';
@@ -26,14 +26,6 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  void _openEsp32Guide(BuildContext context) {
-    final provider = context.read<HomeAutomationProvider>();
-    showDialog(
-      context: context,
-      builder: (_) => Esp32GuideDialog(config: provider.config),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Consumer<HomeAutomationProvider>(
@@ -41,7 +33,7 @@ class HomeScreen extends StatelessWidget {
         final isLightOn = provider.isLightOn;
 
         return Scaffold(
-          backgroundColor: const Color(0xFF0A0F1D),
+          backgroundColor: const Color(0xFF070B14),
           body: AnnotatedRegion<SystemUiOverlayStyle>(
             value: SystemUiOverlayStyle.light,
             child: SafeArea(
@@ -51,25 +43,25 @@ class HomeScreen extends StatelessWidget {
                   // Barra Superior Minimalista
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 10),
                       child: Row(
                         children: [
                           Expanded(
                             child: Row(
                               children: [
                                 Container(
-                                  padding: const EdgeInsets.all(10),
+                                  padding: const EdgeInsets.all(9),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF1E293B),
-                                    borderRadius: BorderRadius.circular(14),
+                                    color: const Color(0xFF131B2E),
+                                    borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
-                                      color: Colors.white.withValues(alpha: 0.08),
+                                      color: Colors.white.withValues(alpha: 0.06),
                                     ),
                                   ),
                                   child: const Icon(
                                     Icons.home_rounded,
                                     color: Color(0xFF38BDF8),
-                                    size: 22,
+                                    size: 20,
                                   ),
                                 ),
                                 const SizedBox(width: 12),
@@ -95,30 +87,34 @@ class HomeScreen extends StatelessWidget {
                                               overflow: TextOverflow.ellipsis,
                                               style: TextStyle(
                                                 fontSize: 11,
-                                                color: Colors.white.withValues(alpha: 0.6),
+                                                color: Colors.white.withValues(alpha: 0.5),
                                               ),
                                             ),
                                           ),
                                           const SizedBox(width: 5),
                                           Container(
-                                            width: 4,
-                                            height: 4,
+                                            width: 3.5,
+                                            height: 3.5,
                                             decoration: const BoxDecoration(
                                               shape: BoxShape.circle,
-                                              color: Colors.white38,
+                                              color: Colors.white30,
                                             ),
                                           ),
                                           const SizedBox(width: 5),
                                           Text(
                                             provider.config.useSimulation
-                                                ? 'Virtual'
-                                                : 'Nube IoT',
+                                                ? 'Modo Demo'
+                                                : (provider.isESP32Available
+                                                    ? 'AP Conectado'
+                                                    : 'Buscando AP...'),
                                             style: TextStyle(
                                               fontSize: 11,
                                               fontWeight: FontWeight.w600,
                                               color: provider.config.useSimulation
                                                   ? const Color(0xFF818CF8)
-                                                  : const Color(0xFF34D399),
+                                                  : (provider.isESP32Available
+                                                      ? const Color(0xFF34D399)
+                                                      : const Color(0xFFFBBF24)),
                                             ),
                                           ),
                                         ],
@@ -129,50 +125,24 @@ class HomeScreen extends StatelessWidget {
                               ],
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              // Botón Guía ESP32
-                              IconButton(
-                                onPressed: () => _openEsp32Guide(context),
-                                tooltip: 'Código y Pines ESP32',
-                                style: IconButton.styleFrom(
-                                  backgroundColor: const Color(0xFF1E293B),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    side: BorderSide(
-                                      color: Colors.white.withValues(alpha: 0.08),
-                                    ),
-                                  ),
-                                ),
-                                icon: const Icon(
-                                  Icons.developer_board_rounded,
-                                  color: Color(0xFF10B981),
-                                  size: 20,
+                          // Botón Ajustes del Punto de Acceso
+                          IconButton(
+                            onPressed: () => _openSettings(context),
+                            tooltip: 'Ajustes del Punto de Acceso',
+                            style: IconButton.styleFrom(
+                              backgroundColor: const Color(0xFF131B2E),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                side: BorderSide(
+                                  color: Colors.white.withValues(alpha: 0.06),
                                 ),
                               ),
-                              const SizedBox(width: 6),
-                              // Botón Ajustes
-                              IconButton(
-                                onPressed: () => _openSettings(context),
-                                tooltip: 'Ajustes del Broker',
-                                style: IconButton.styleFrom(
-                                  backgroundColor: const Color(0xFF1E293B),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    side: BorderSide(
-                                      color: Colors.white.withValues(alpha: 0.08),
-                                    ),
-                                  ),
-                                ),
-                                icon: const Icon(
-                                  Icons.tune_rounded,
-                                  color: Colors.white70,
-                                  size: 20,
-                                ),
-                              ),
-                            ],
+                            ),
+                            icon: const Icon(
+                              Icons.tune_rounded,
+                              color: Colors.white70,
+                              size: 18,
+                            ),
                           ),
                         ],
                       ),
@@ -182,21 +152,36 @@ class HomeScreen extends StatelessWidget {
                   // Interfaz Inmersiva del Cuarto (Foco y Lámpara)
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+                      padding: const EdgeInsets.fromLTRB(20, 10, 20, 14),
                       child: ImmersiveRoomView(
                         isLightOn: isLightOn,
                         onToggle: () {
                           HapticFeedback.mediumImpact();
-                          provider.toggleLight();
+                          if (provider.operatingMode == OperatingMode.app) {
+                            provider.toggleLight();
+                          } else {
+                            ScaffoldMessenger.of(context).clearSnackBars();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  provider.operatingMode == OperatingMode.photocell
+                                      ? 'Modo Fotocélula activo. Cambia a "App" para control directo.'
+                                      : 'Modo Manual NA activo. Cambia a "App" para control directo.',
+                                ),
+                                behavior: SnackBarBehavior.floating,
+                                duration: const Duration(seconds: 2),
+                              ),
+                            );
+                          }
                         },
                       ),
                     ),
                   ),
 
-                  // Parte Final: Opciones de los 3 Modos de Operación
+                  // Parte Final: Solo el Selector y Estado de los 3 Modos de Operación
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
                       child: OperatingModesCard(
                         currentMode: provider.operatingMode,
                         isLightOn: isLightOn,
@@ -204,11 +189,6 @@ class HomeScreen extends StatelessWidget {
                         isManualSwitchClosed: provider.isManualSwitchClosed,
                         formattedRuntime: provider.formattedRuntime,
                         onModeChanged: (mode) => provider.setOperatingMode(mode),
-                        onToggleLight: () => provider.toggleLight(),
-                        onLightLevelChanged: (level) =>
-                            provider.setAmbientLightLevel(level),
-                        onManualSwitchChanged: (isClosed) =>
-                            provider.setManualSwitch(isClosed),
                       ),
                     ),
                   ),

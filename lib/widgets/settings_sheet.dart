@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import '../models/mqtt_config.dart';
+import '../models/esp32_config.dart';
 
 class SettingsSheet extends StatefulWidget {
-  final MqttConfig currentConfig;
+  final Esp32Config currentConfig;
   final List<String> eventLogs;
-  final ValueChanged<MqttConfig> onSave;
+  final ValueChanged<Esp32Config> onSave;
 
   const SettingsSheet({
     super.key,
@@ -20,14 +20,9 @@ class SettingsSheet extends StatefulWidget {
 class _SettingsSheetState extends State<SettingsSheet>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  late TextEditingController _brokerController;
+  late TextEditingController _ipController;
   late TextEditingController _portController;
-  late TextEditingController _clientIdController;
-  late TextEditingController _usernameController;
-  late TextEditingController _passwordController;
-  late TextEditingController _cmdTopicController;
-  late TextEditingController _statusTopicController;
-  late TextEditingController _availTopicController;
+  late TextEditingController _ssidController;
   late bool _useSimulation;
 
   @override
@@ -35,46 +30,31 @@ class _SettingsSheetState extends State<SettingsSheet>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     final c = widget.currentConfig;
-    _brokerController = TextEditingController(text: c.broker);
+    _ipController = TextEditingController(text: c.ipAddress);
     _portController = TextEditingController(text: c.port.toString());
-    _clientIdController = TextEditingController(text: c.clientId);
-    _usernameController = TextEditingController(text: c.username ?? '');
-    _passwordController = TextEditingController(text: c.password ?? '');
-    _cmdTopicController = TextEditingController(text: c.topicCommand);
-    _statusTopicController = TextEditingController(text: c.topicStatus);
-    _availTopicController = TextEditingController(text: c.topicAvailability);
+    _ssidController = TextEditingController(text: c.apSsid);
     _useSimulation = c.useSimulation;
   }
 
   @override
   void dispose() {
     _tabController.dispose();
-    _brokerController.dispose();
+    _ipController.dispose();
     _portController.dispose();
-    _clientIdController.dispose();
-    _usernameController.dispose();
-    _passwordController.dispose();
-    _cmdTopicController.dispose();
-    _statusTopicController.dispose();
-    _availTopicController.dispose();
+    _ssidController.dispose();
     super.dispose();
   }
 
   void _save() {
-    final port = int.tryParse(_portController.text.trim()) ?? 1883;
+    final port = int.tryParse(_portController.text.trim()) ?? 80;
     final newConfig = widget.currentConfig.copyWith(
-      broker: _brokerController.text.trim(),
+      ipAddress: _ipController.text.trim().isEmpty
+          ? '192.168.4.1'
+          : _ipController.text.trim(),
       port: port,
-      clientId: _clientIdController.text.trim(),
-      username: _usernameController.text.trim().isEmpty
-          ? null
-          : _usernameController.text.trim(),
-      password: _passwordController.text.trim().isEmpty
-          ? null
-          : _passwordController.text.trim(),
-      topicCommand: _cmdTopicController.text.trim(),
-      topicStatus: _statusTopicController.text.trim(),
-      topicAvailability: _availTopicController.text.trim(),
+      apSsid: _ssidController.text.trim().isEmpty
+          ? 'ESP32_Domotica'
+          : _ssidController.text.trim(),
       useSimulation: _useSimulation,
     );
 
@@ -85,7 +65,7 @@ class _SettingsSheetState extends State<SettingsSheet>
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: MediaQuery.of(context).size.height * 0.85,
+      height: MediaQuery.of(context).size.height * 0.78,
       padding: const EdgeInsets.only(top: 12),
       decoration: const BoxDecoration(
         color: Color(0xFF0F172A),
@@ -112,12 +92,13 @@ class _SettingsSheetState extends State<SettingsSheet>
               children: [
                 const Row(
                   children: [
-                    Icon(Icons.tune_rounded, color: Color(0xFF38BDF8), size: 22),
+                    Icon(Icons.wifi_tethering_rounded,
+                        color: Color(0xFF38BDF8), size: 22),
                     SizedBox(width: 10),
                     Text(
-                      'Configuración IoT (Nube)',
+                      'Punto de Acceso ESP32',
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: 17,
                         fontWeight: FontWeight.w700,
                         color: Colors.white,
                       ),
@@ -139,7 +120,7 @@ class _SettingsSheetState extends State<SettingsSheet>
             labelColor: const Color(0xFF38BDF8),
             unselectedLabelColor: Colors.white54,
             tabs: const [
-              Tab(text: 'Servidor y Topics'),
+              Tab(text: 'Conexión SoftAP'),
               Tab(text: 'Registro en Vivo (Logs)'),
             ],
           ),
@@ -159,7 +140,7 @@ class _SettingsSheetState extends State<SettingsSheet>
             padding: const EdgeInsets.all(20),
             child: SizedBox(
               width: double.infinity,
-              height: 52,
+              height: 50,
               child: ElevatedButton(
                 onPressed: _save,
                 style: ElevatedButton.styleFrom(
@@ -170,8 +151,8 @@ class _SettingsSheetState extends State<SettingsSheet>
                   ),
                 ),
                 child: const Text(
-                  'GUARDAR Y APLICAR CAMBIOS',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                  'GUARDAR Y CONECTAR AL ESP32',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
                 ),
               ),
             ),
@@ -185,7 +166,7 @@ class _SettingsSheetState extends State<SettingsSheet>
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        // Switch de Simulación
+        // Modo Simulación
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -221,7 +202,7 @@ class _SettingsSheetState extends State<SettingsSheet>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Modo Simulación Virtual',
+                      'Modo Simulación (Demo)',
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
@@ -231,8 +212,8 @@ class _SettingsSheetState extends State<SettingsSheet>
                     const SizedBox(height: 2),
                     Text(
                       _useSimulation
-                          ? 'Prueba la app de inmediato sin ESP32 encendido'
-                          : 'Conectando a broker MQTT real en internet',
+                          ? 'Prueba sin necesidad de conectarte al Wi-Fi del ESP32'
+                          : 'Conectando al Wi-Fi del ESP32 en tiempo real',
                       style: TextStyle(
                         fontSize: 11,
                         color: Colors.white.withValues(alpha: 0.5),
@@ -257,7 +238,7 @@ class _SettingsSheetState extends State<SettingsSheet>
         const SizedBox(height: 20),
 
         const Text(
-          'BROKER MQTT (ACCESO POR INTERNET)',
+          'RED WI-FI EMITIDA POR EL ESP32',
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w700,
@@ -267,15 +248,24 @@ class _SettingsSheetState extends State<SettingsSheet>
         ),
         const SizedBox(height: 8),
 
+        _buildTextField(
+          controller: _ssidController,
+          label: 'Nombre de Red Wi-Fi (SSID del ESP32)',
+          hint: 'ESP32_Domotica',
+          icon: Icons.wifi_rounded,
+        ),
+
+        const SizedBox(height: 14),
+
         Row(
           children: [
             Expanded(
               flex: 3,
               child: _buildTextField(
-                controller: _brokerController,
-                label: 'Broker Host',
-                hint: 'broker.emqx.io o hivemq',
-                icon: Icons.dns_rounded,
+                controller: _ipController,
+                label: 'IP del ESP32 (SoftAP)',
+                hint: '192.168.4.1',
+                icon: Icons.router_rounded,
               ),
             ),
             const SizedBox(width: 10),
@@ -284,7 +274,7 @@ class _SettingsSheetState extends State<SettingsSheet>
               child: _buildTextField(
                 controller: _portController,
                 label: 'Puerto',
-                hint: '1883',
+                hint: '80',
                 keyboardType: TextInputType.number,
                 icon: Icons.tag_rounded,
               ),
@@ -292,61 +282,28 @@ class _SettingsSheetState extends State<SettingsSheet>
           ],
         ),
 
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _buildTextField(
-                controller: _usernameController,
-                label: 'Usuario (opcional)',
-                hint: 'Dejar vacío si es público',
-                icon: Icons.person_outline_rounded,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _buildTextField(
-                controller: _passwordController,
-                label: 'Contraseña (opcional)',
-                hint: '••••••',
-                obscureText: true,
-                icon: Icons.lock_outline_rounded,
-              ),
-            ),
-          ],
-        ),
+        const SizedBox(height: 16),
 
-        const SizedBox(height: 20),
-        const Text(
-          'TOPICS DE COMUNICACIÓN (ESP32)',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF94A3B8),
-            letterSpacing: 0.5,
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0B132B),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
           ),
-        ),
-        const SizedBox(height: 8),
-
-        _buildTextField(
-          controller: _cmdTopicController,
-          label: 'Topic Comandos (App -> ESP32)',
-          hint: 'domotica/cuarto/luz/set',
-          icon: Icons.send_rounded,
-        ),
-        const SizedBox(height: 10),
-        _buildTextField(
-          controller: _statusTopicController,
-          label: 'Topic Estado (ESP32 -> App)',
-          hint: 'domotica/cuarto/luz/state',
-          icon: Icons.sync_rounded,
-        ),
-        const SizedBox(height: 10),
-        _buildTextField(
-          controller: _availTopicController,
-          label: 'Topic Disponibilidad LWT (Online/Offline)',
-          hint: 'domotica/cuarto/esp32/status',
-          icon: Icons.wifi_find_rounded,
+          child: const Row(
+            children: [
+              Icon(Icons.info_outline_rounded,
+                  color: Color(0xFF38BDF8), size: 18),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'El ESP32 emite su propia red Wi-Fi. Conecta tu teléfono a ella antes de operar la app en modo real.',
+                  style: TextStyle(fontSize: 11, color: Colors.white70),
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -371,8 +328,9 @@ class _SettingsSheetState extends State<SettingsSheet>
       ),
       itemBuilder: (context, index) {
         final log = widget.eventLogs[index];
-        final isError = log.toLowerCase().contains('error');
-        final isSuccess = log.toLowerCase().contains('exitos') ||
+        final isError = log.toLowerCase().contains('error') ||
+            log.toLowerCase().contains('sin conexión');
+        final isSuccess = log.toLowerCase().contains('conectado') ||
             log.toLowerCase().contains('encendido');
 
         return Padding(
@@ -399,12 +357,10 @@ class _SettingsSheetState extends State<SettingsSheet>
     required String label,
     required String hint,
     required IconData icon,
-    bool obscureText = false,
     TextInputType keyboardType = TextInputType.text,
   }) {
     return TextField(
       controller: controller,
-      obscureText: obscureText,
       keyboardType: keyboardType,
       style: const TextStyle(fontSize: 13, color: Colors.white),
       decoration: InputDecoration(

@@ -1,29 +1,27 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/mqtt_config.dart';
+import '../models/esp32_config.dart';
 
 class StorageService {
-  static const _configKey = 'mqtt_config_v1';
+  static const _apConfigKey = 'esp32_ap_config_v1';
   static const _lastRelayStateKey = 'last_relay_state_v1';
 
-  static Future<MqttConfig> loadConfig() async {
+  static Future<Esp32Config> loadEsp32Config() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final jsonStr = prefs.getString(_configKey);
+      final jsonStr = prefs.getString(_apConfigKey);
       if (jsonStr != null) {
         final Map<String, dynamic> data = jsonDecode(jsonStr);
-        return MqttConfig.fromJson(data);
+        return Esp32Config.fromJson(data);
       }
-    } catch (e) {
-      // Retornar configuración por defecto en caso de error
-    }
-    return const MqttConfig();
+    } catch (_) {}
+    return const Esp32Config();
   }
 
-  static Future<void> saveConfig(MqttConfig config) async {
+  static Future<void> saveEsp32Config(Esp32Config config) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_configKey, jsonEncode(config.toJson()));
+      await prefs.setString(_apConfigKey, jsonEncode(config.toJson()));
     } catch (_) {}
   }
 
