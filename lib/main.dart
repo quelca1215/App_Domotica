@@ -24,7 +24,7 @@ class DomoticaApp extends StatelessWidget {
     return ChangeNotifierProvider(
       create: (_) => HomeAutomationProvider()..initialize(),
       child: MaterialApp(
-        title: 'Domótica ESP32',
+        title: 'DomoHouse',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           useMaterial3: true,
