@@ -6,6 +6,7 @@ import '../models/device_state.dart';
 import '../models/esp32_config.dart';
 
 typedef OnRelayStateReceived = void Function(bool isOn);
+typedef OnDimmerReceived = void Function(int brightness);
 typedef OnOperatingModeReceived = void Function(OperatingMode mode);
 typedef OnLightSensorReceived = void Function(double lightLevel);
 typedef OnManualSwitchReceived = void Function(bool isClosed);
@@ -17,6 +18,7 @@ class Esp32ApService {
   bool _isPolling = false;
 
   OnRelayStateReceived? onRelayStateReceived;
+  OnDimmerReceived? onDimmerReceived;
   OnOperatingModeReceived? onOperatingModeReceived;
   OnLightSensorReceived? onLightSensorReceived;
   OnManualSwitchReceived? onManualSwitchReceived;
@@ -76,6 +78,12 @@ class Esp32ApService {
               data['foco'].toString().toUpperCase() == 'ON' ||
               data['foco'] == 1;
           onRelayStateReceived?.call(focoOn);
+        }
+
+        // 1.1 Brillo del Dimmer (0 a 100%)
+        if (data.containsKey('dimmer')) {
+          final int brillo = (data['dimmer'] as num).toInt();
+          onDimmerReceived?.call(brillo);
         }
 
         // 2. Modo de Operación
@@ -142,6 +150,33 @@ class Esp32ApService {
       }
     } catch (e) {
       debugPrint('[ESP32 AP] Error al enviar foco: $e');
+      _setStatus(ESP32ConnectionStatus.error, e.toString());
+    } finally {
+      client.close();
+    }
+    return false;
+  }
+
+  /// Envía comando para ajustar la intensidad del dimmer: GET /set_dimmer?brillo=0..100
+  Future<bool> setDimmer(int brillo) async {
+    if (_config.useSimulation) return true;
+
+    final client = _createClient();
+    try {
+      final clamped = brillo.clamp(0, 100);
+      final uri = Uri.parse('${_config.baseUrl}/set_dimmer?brillo=$clamped');
+      debugPrint('[ESP32 AP] Enviando dimmer: $uri');
+
+      final request = await client.getUrl(uri);
+      final response = await request.close();
+
+      client.close();
+      if (response.statusCode == 200) {
+        _setStatus(ESP32ConnectionStatus.online);
+        return true;
+      }
+    } catch (e) {
+      debugPrint('[ESP32 AP] Error al regular dimmer: $e');
       _setStatus(ESP32ConnectionStatus.error, e.toString());
     } finally {
       client.close();

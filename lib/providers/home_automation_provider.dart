@@ -18,15 +18,18 @@ class HomeAutomationProvider extends ChangeNotifier {
   bool _isInitialized = false;
 
   OperatingMode _operatingMode = OperatingMode.app;
+  int _dimmerBrightness = 0;
 
   Timer? _runtimeTimer;
   int _secondsOn = 0;
 
   Timer? _simulationTelemetryTimer;
+  Timer? _dimmerDebounceTimer;
   final List<String> _eventLogs = [];
 
   // Getters
   bool get isLightOn => _isLightOn;
+  int get dimmerBrightness => _dimmerBrightness;
   RelayState get relayState => _isLightOn ? RelayState.closed : RelayState.open;
   ESP32ConnectionStatus get connectionStatus => _connectionStatus;
   String? get connectionError => _connectionError;
@@ -56,6 +59,14 @@ class HomeAutomationProvider extends ChangeNotifier {
       _isESP32Available = true;
       _addLog('ESP32 reportó foco: ${isOn ? "ENCENDIDO" : "APAGADO"}');
       _setLightInternal(isOn, notifyESP32: false);
+    };
+
+    _esp32Service.onDimmerReceived = (int brillo) {
+      if (_dimmerBrightness != brillo) {
+        _dimmerBrightness = brillo;
+        _addLog('Dimmer sincronizado con ESP32: $brillo%');
+        notifyListeners();
+      }
     };
 
     _esp32Service.onOperatingModeReceived = (OperatingMode mode) {
@@ -207,7 +218,6 @@ class HomeAutomationProvider extends ChangeNotifier {
     if (_isLightOn == turnOn) return;
 
     _isLightOn = turnOn;
-    await StorageService.saveLastRelayState(_isLightOn);
 
     if (_isLightOn) {
       _startRuntimeTimer();
@@ -219,14 +229,20 @@ class HomeAutomationProvider extends ChangeNotifier {
       _addLog('Foco APAGADO');
     }
 
-    if (notifyESP32 && !_config.useSimulation) {
-      final success = await _esp32Service.setFoco(turnOn);
-      if (!success) {
-        _addLog('Aviso: No se pudo enviar comando al ESP32');
-      }
-    }
-
+    // ⚡ Actualización visual instantánea (0ms de latencia)
     notifyListeners();
+
+    // Guardar estado en almacenamiento de fondo
+    unawaited(StorageService.saveLastRelayState(_isLightOn));
+
+    // Enviar comando HTTP al ESP32 en segundo plano
+    if (notifyESP32 && !_config.useSimulation) {
+      _esp32Service.setFoco(turnOn).then((success) {
+        if (!success) {
+          _addLog('Aviso: Falló el envío HTTP al ESP32');
+        }
+      });
+    }
   }
 
   void _startRuntimeTimer() {
@@ -299,8 +315,24 @@ class HomeAutomationProvider extends ChangeNotifier {
     }
   }
 
+  /// Ajusta el brillo del circuito Dimmer (0 a 100%) con debounce suave
+  void setDimmerBrightness(int brightness) {
+    final clamped = brightness.clamp(0, 100);
+    if (_dimmerBrightness == clamped) return;
+
+    _dimmerBrightness = clamped;
+    notifyListeners();
+
+    _dimmerDebounceTimer?.cancel();
+    _dimmerDebounceTimer = Timer(const Duration(milliseconds: 140), () {
+      _esp32Service.setDimmer(_dimmerBrightness);
+      _addLog('Dimmer regulado a $_dimmerBrightness%');
+    });
+  }
+
   @override
   void dispose() {
+    _dimmerDebounceTimer?.cancel();
     _runtimeTimer?.cancel();
     _simulationTelemetryTimer?.cancel();
     _esp32Service.dispose();

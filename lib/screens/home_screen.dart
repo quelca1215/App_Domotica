@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../models/device_state.dart';
 import '../providers/home_automation_provider.dart';
+import '../widgets/dimmer_control_card.dart';
 import '../widgets/immersive_room_view.dart';
 import '../widgets/operating_modes_card.dart';
 import '../widgets/settings_sheet.dart';
@@ -155,6 +156,7 @@ class HomeScreen extends StatelessWidget {
                       padding: const EdgeInsets.fromLTRB(20, 10, 20, 14),
                       child: ImmersiveRoomView(
                         isLightOn: isLightOn,
+                        dimmerBrightness: provider.dimmerBrightness,
                         onToggle: () {
                           HapticFeedback.mediumImpact();
                           if (provider.operatingMode == OperatingMode.app) {
@@ -178,17 +180,13 @@ class HomeScreen extends StatelessWidget {
                     ),
                   ),
 
-                  // Parte Final: Solo el Selector y Estado de los 3 Modos de Operación
+                  // Circuito 2: Luz Regulable (Dimmer Triac)
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-                      child: OperatingModesCard(
-                        currentMode: provider.operatingMode,
-                        isLightOn: isLightOn,
-                        ambientLightLevel: provider.ambientLightLevel,
-                        isManualSwitchClosed: provider.isManualSwitchClosed,
-                        formattedRuntime: provider.formattedRuntime,
-                        onModeChanged: (mode) => provider.setOperatingMode(mode),
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
+                      child: DimmerControlCard(
+                        brightness: provider.dimmerBrightness,
+                        onChanged: (val) => provider.setDimmerBrightness(val),
                       ),
                     ),
                   ),
