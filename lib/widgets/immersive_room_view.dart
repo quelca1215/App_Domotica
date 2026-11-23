@@ -3,12 +3,16 @@ import 'package:flutter/services.dart';
 
 class ImmersiveRoomView extends StatefulWidget {
   final bool isLightOn;
+  final bool isIrLightOn;
+  final int irRemainingSeconds;
   final int dimmerBrightness;
   final VoidCallback onToggle;
 
   const ImmersiveRoomView({
     super.key,
     required this.isLightOn,
+    this.isIrLightOn = false,
+    this.irRemainingSeconds = 0,
     this.dimmerBrightness = 0,
     required this.onToggle,
   });
@@ -119,11 +123,12 @@ class _ImmersiveRoomViewState extends State<ImmersiveRoomView>
                   ),
                 ),
 
-                // Muebles e ilustración inmersiva (Cama, ventana, mesa de noche y dimmer)
+                // Muebles e ilustración inmersiva (Cama, ventana, mesa de noche y segundo foco IR)
                 CustomPaint(
                   painter: _FurniturePainter(
                     isLightOn: widget.isLightOn,
-                    dimmerBrightness: widget.dimmerBrightness,
+                    dimmerBrightness:
+                        widget.isIrLightOn ? 100 : widget.dimmerBrightness,
                   ),
                 ),
 
@@ -174,7 +179,7 @@ class _ImmersiveRoomViewState extends State<ImmersiveRoomView>
                   ),
                 ),
 
-                // Placa superior de estado: "Luz Principal (Relé)"
+                // Placa superior izquierda de estado: "Foco 1 (Touch / Interruptor)"
                 Positioned(
                   top: 14,
                   left: 16,
@@ -213,14 +218,70 @@ class _ImmersiveRoomViewState extends State<ImmersiveRoomView>
                         ),
                         const SizedBox(width: 7),
                         Text(
-                          widget.isLightOn
-                              ? 'Luz Principal: ON'
-                              : 'Luz Principal: OFF',
+                          widget.isLightOn ? 'Foco 1: ON' : 'Foco 1: OFF',
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
                             color: widget.isLightOn
                                 ? const Color(0xFFFDE68A)
+                                : const Color(0xFF94A3B8),
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Placa superior derecha de estado: "Foco 2 IR"
+                Positioned(
+                  top: 14,
+                  right: 16,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF070B14).withValues(alpha: 0.75),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: widget.isIrLightOn
+                            ? const Color(0xFFA855F7).withValues(alpha: 0.45)
+                            : Colors.white.withValues(alpha: 0.08),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 7,
+                          height: 7,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: widget.isIrLightOn
+                                ? const Color(0xFFA855F7)
+                                : const Color(0xFF64748B),
+                            boxShadow: widget.isIrLightOn
+                                ? [
+                                    const BoxShadow(
+                                      color: Color(0xFFA855F7),
+                                      blurRadius: 6,
+                                      spreadRadius: 1,
+                                    ),
+                                  ]
+                                : [],
+                          ),
+                        ),
+                        const SizedBox(width: 7),
+                        Text(
+                          widget.isIrLightOn
+                              ? (widget.irRemainingSeconds > 0
+                                  ? 'Foco 2 IR: ${widget.irRemainingSeconds}s'
+                                  : 'Foco 2 IR: ON')
+                              : 'Foco 2 IR: OFF',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: widget.isIrLightOn
+                                ? const Color(0xFFE9D5FF)
                                 : const Color(0xFF94A3B8),
                             letterSpacing: 0.2,
                           ),
@@ -293,15 +354,19 @@ class _ImmersiveRoomViewState extends State<ImmersiveRoomView>
                                   color: Color(0xFFFBBF24),
                                 ),
                               const SizedBox(width: 8),
-                              Text(
-                                on
-                                    ? 'Foco Encendido • Toca para apagar'
-                                    : 'Toca la pantalla para encender la luz',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: on ? const Color(0xFFFEF08A) : Colors.white,
-                                  letterSpacing: 0.2,
+                              Flexible(
+                                child: Text(
+                                  on
+                                      ? 'Foco 1 Encendido • Toca para apagar'
+                                      : 'Toca la pantalla para encender Foco 1',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: on ? const Color(0xFFFEF08A) : Colors.white,
+                                    letterSpacing: 0.2,
+                                  ),
                                 ),
                               ),
                             ],
@@ -573,17 +638,17 @@ class _FurniturePainter extends CustomPainter {
       final dimmerGlowPaint = Paint()
         ..shader = RadialGradient(
           colors: [
-            const Color(0xFFFFD54F).withValues(alpha: 0.40 * dimmerRatio),
-            const Color(0xFFFFB300).withValues(alpha: 0.18 * dimmerRatio),
+            const Color(0xFFFFD54F).withValues(alpha: 0.55 * dimmerRatio),
+            const Color(0xFFFFB300).withValues(alpha: 0.22 * dimmerRatio),
             Colors.transparent,
           ],
         ).createShader(Rect.fromCircle(
           center: Offset(lampX, lampY - 8),
-          radius: 35 * dimmerRatio + 8,
+          radius: 56 * dimmerRatio + 12,
         ));
       canvas.drawCircle(
         Offset(lampX, lampY - 8),
-        35 * dimmerRatio + 8,
+        56 * dimmerRatio + 12,
         dimmerGlowPaint,
       );
     }

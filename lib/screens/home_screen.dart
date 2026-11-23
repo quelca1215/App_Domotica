@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import '../models/device_state.dart';
 import '../providers/home_automation_provider.dart';
-import '../widgets/dimmer_control_card.dart';
+import '../widgets/dht_sensor_card.dart';
 import '../widgets/immersive_room_view.dart';
-import '../widgets/operating_modes_card.dart';
+import '../widgets/ir_sensor_control_card.dart';
 import '../widgets/settings_sheet.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -31,38 +30,40 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<HomeAutomationProvider>(
       builder: (context, provider, child) {
-        final isLightOn = provider.isLightOn;
+        final isFoco1On = provider.foco1Encendido;
+        final isFoco2On = provider.foco2Encendido;
+        final telemetry = provider.telemetry;
 
         return Scaffold(
-          backgroundColor: const Color(0xFF070B14),
+          backgroundColor: const Color(0xFF0A0F1D),
           body: AnnotatedRegion<SystemUiOverlayStyle>(
             value: SystemUiOverlayStyle.light,
             child: SafeArea(
               child: CustomScrollView(
                 physics: const BouncingScrollPhysics(),
                 slivers: [
-                  // Barra Superior Minimalista
+                  // Barra Superior con Estado del ESP32
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 10),
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 14),
                       child: Row(
                         children: [
                           Expanded(
                             child: Row(
                               children: [
                                 Container(
-                                  padding: const EdgeInsets.all(9),
+                                  padding: const EdgeInsets.all(10),
                                   decoration: BoxDecoration(
                                     color: const Color(0xFF131B2E),
-                                    borderRadius: BorderRadius.circular(12),
+                                    borderRadius: BorderRadius.circular(14),
                                     border: Border.all(
-                                      color: Colors.white.withValues(alpha: 0.06),
+                                      color: Colors.white.withValues(alpha: 0.08),
                                     ),
                                   ),
                                   child: const Icon(
                                     Icons.home_rounded,
                                     color: Color(0xFF38BDF8),
-                                    size: 20,
+                                    size: 22,
                                   ),
                                 ),
                                 const SizedBox(width: 12),
@@ -71,9 +72,9 @@ class HomeScreen extends StatelessWidget {
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       const Text(
-                                        'Casa Inteligente',
+                                        'DomoHouse ESP32',
                                         style: TextStyle(
-                                          fontSize: 17,
+                                          fontSize: 18,
                                           fontWeight: FontWeight.w800,
                                           color: Colors.white,
                                           letterSpacing: 0.2,
@@ -81,41 +82,33 @@ class HomeScreen extends StatelessWidget {
                                       ),
                                       Row(
                                         children: [
-                                          Flexible(
-                                            child: Text(
-                                              'Dormitorio Principal',
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                fontSize: 11,
-                                                color: Colors.white.withValues(alpha: 0.5),
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 5),
                                           Container(
-                                            width: 3.5,
-                                            height: 3.5,
-                                            decoration: const BoxDecoration(
+                                            width: 7,
+                                            height: 7,
+                                            decoration: BoxDecoration(
                                               shape: BoxShape.circle,
-                                              color: Colors.white30,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 5),
-                                          Text(
-                                            provider.config.useSimulation
-                                                ? 'Modo Demo'
-                                                : (provider.isESP32Available
-                                                    ? 'AP Conectado'
-                                                    : 'Buscando AP...'),
-                                            style: TextStyle(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.w600,
                                               color: provider.config.useSimulation
                                                   ? const Color(0xFF818CF8)
                                                   : (provider.isESP32Available
-                                                      ? const Color(0xFF34D399)
+                                                      ? const Color(0xFF10B981)
                                                       : const Color(0xFFFBBF24)),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Flexible(
+                                            child: Text(
+                                              provider.config.useSimulation
+                                                  ? 'Modo Demo (Simulación)'
+                                                  : (provider.isESP32Available
+                                                      ? 'Conectado a ${provider.config.apSsid}'
+                                                      : 'Conectando a ${provider.config.ipAddress}...'),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.white.withValues(alpha: 0.7),
+                                              ),
                                             ),
                                           ),
                                         ],
@@ -126,23 +119,23 @@ class HomeScreen extends StatelessWidget {
                               ],
                             ),
                           ),
-                          // Botón Ajustes del Punto de Acceso
+                          // Botón Ajustes
                           IconButton(
                             onPressed: () => _openSettings(context),
-                            tooltip: 'Ajustes del Punto de Acceso',
+                            tooltip: 'Configuración ESP32',
                             style: IconButton.styleFrom(
                               backgroundColor: const Color(0xFF131B2E),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 side: BorderSide(
-                                  color: Colors.white.withValues(alpha: 0.06),
+                                  color: Colors.white.withValues(alpha: 0.08),
                                 ),
                               ),
                             ),
                             icon: const Icon(
                               Icons.tune_rounded,
                               color: Colors.white70,
-                              size: 18,
+                              size: 20,
                             ),
                           ),
                         ],
@@ -150,43 +143,46 @@ class HomeScreen extends StatelessWidget {
                     ),
                   ),
 
-                  // Interfaz Inmersiva del Cuarto (Foco y Lámpara)
+                  // 1. Interfaz Inmersiva del Cuarto (Foco 1: Touch/App + Foco 2: Lámpara IR)
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 10, 20, 14),
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
                       child: ImmersiveRoomView(
-                        isLightOn: isLightOn,
-                        dimmerBrightness: provider.dimmerBrightness,
+                        isLightOn: isFoco1On,
+                        isIrLightOn: isFoco2On,
+                        irRemainingSeconds: provider.foco2RemainingSeconds,
                         onToggle: () {
                           HapticFeedback.mediumImpact();
-                          if (provider.operatingMode == OperatingMode.app) {
-                            provider.toggleLight();
-                          } else {
-                            ScaffoldMessenger.of(context).clearSnackBars();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  provider.operatingMode == OperatingMode.photocell
-                                      ? 'Modo Fotocélula activo. Cambia a "App" para control directo.'
-                                      : 'Modo Manual NA activo. Cambia a "App" para control directo.',
-                                ),
-                                behavior: SnackBarBehavior.floating,
-                                duration: const Duration(seconds: 2),
-                              ),
-                            );
-                          }
+                          provider.toggleFoco1();
                         },
                       ),
                     ),
                   ),
 
-                  // Circuito 2: Luz Regulable (Dimmer Triac)
+                  // 2. Tarjeta Foco 2 (Relé 2: Sensor Infrarrojo + Configuración de Tiempo)
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
-                      child: DimmerControlCard(
-                        brightness: provider.dimmerBrightness,
-                        onChanged: (val) => provider.setDimmerBrightness(val),
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                      child: IrSensorControlCard(
+                        isFoco2On: isFoco2On,
+                        currentSeconds: provider.tiempoEncendidoSeg,
+                        remainingSeconds: provider.foco2RemainingSeconds,
+                        onSaveSeconds: (seg) => provider.setTiempoIR(seg),
+                        onSimulateTrigger: provider.config.useSimulation
+                            ? () => provider.simulateTriggerIR()
+                            : null,
+                      ),
+                    ),
+                  ),
+
+                  // 3. Tarjeta Ambiente (DHT11: Temperatura y Humedad)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                      child: DhtSensorCard(
+                        temp: telemetry.temperature,
+                        hum: telemetry.humidity,
+                        dhtOk: telemetry.dhtOk,
                       ),
                     ),
                   ),

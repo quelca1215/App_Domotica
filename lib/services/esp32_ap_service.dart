@@ -5,11 +5,14 @@ import 'package:flutter/foundation.dart';
 import '../models/device_state.dart';
 import '../models/esp32_config.dart';
 
-typedef OnRelayStateReceived = void Function(bool isOn);
-typedef OnDimmerReceived = void Function(int brightness);
-typedef OnOperatingModeReceived = void Function(OperatingMode mode);
-typedef OnLightSensorReceived = void Function(double lightLevel);
-typedef OnManualSwitchReceived = void Function(bool isClosed);
+typedef OnStatusReceived = void Function({
+  required bool foco1,
+  required bool foco2,
+  required int tiempoSegundos,
+  required bool dhtOk,
+  required double temp,
+  required double hum,
+});
 typedef OnConnectionStatusChanged = void Function(ESP32ConnectionStatus status, String? error);
 
 class Esp32ApService {
@@ -17,11 +20,7 @@ class Esp32ApService {
   Timer? _pollingTimer;
   bool _isPolling = false;
 
-  OnRelayStateReceived? onRelayStateReceived;
-  OnDimmerReceived? onDimmerReceived;
-  OnOperatingModeReceived? onOperatingModeReceived;
-  OnLightSensorReceived? onLightSensorReceived;
-  OnManualSwitchReceived? onManualSwitchReceived;
+  OnStatusReceived? onStatusReceived;
   OnConnectionStatusChanged? onConnectionStatusChanged;
 
   ESP32ConnectionStatus _status = ESP32ConnectionStatus.disconnected;
@@ -33,8 +32,8 @@ class Esp32ApService {
 
   void startPolling() {
     stopPolling();
-    // Sondeo periódico cada 2 segundos mientras esté conectado al AP
-    _pollingTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+    // Sondeo rápido cada 600ms para reflejar cambios del switch y sensor IR
+    _pollingTimer = Timer.periodic(const Duration(milliseconds: 600), (_) {
       if (!_isPolling && !_config.useSimulation) {
         syncStatus();
       }
@@ -50,7 +49,7 @@ class Esp32ApService {
 
   HttpClient _createClient() {
     final client = HttpClient();
-    client.connectionTimeout = const Duration(milliseconds: 1800);
+    client.connectionTimeout = const Duration(milliseconds: 1500);
     return client;
   }
 
@@ -72,43 +71,21 @@ class Esp32ApService {
 
         _setStatus(ESP32ConnectionStatus.online);
 
-        // 1. Estado del Foco
-        if (data.containsKey('foco')) {
-          final bool focoOn = data['foco'] == true ||
-              data['foco'].toString().toUpperCase() == 'ON' ||
-              data['foco'] == 1;
-          onRelayStateReceived?.call(focoOn);
-        }
+        final bool foco1 = data['foco1'] == true;
+        final bool foco2 = data['foco2'] == true;
+        final int tiempo = (data['tiempo'] as num?)?.toInt() ?? 60;
+        final bool dhtOk = data['dhtOk'] == true;
+        final double temp = (data['temp'] as num?)?.toDouble() ?? 0.0;
+        final double hum = (data['hum'] as num?)?.toDouble() ?? 0.0;
 
-        // 1.1 Brillo del Dimmer (0 a 100%)
-        if (data.containsKey('dimmer')) {
-          final int brillo = (data['dimmer'] as num).toInt();
-          onDimmerReceived?.call(brillo);
-        }
-
-        // 2. Modo de Operación
-        if (data.containsKey('modo')) {
-          final modoStr = data['modo'].toString().toLowerCase();
-          if (modoStr == 'photocell' || modoStr == 'fotocelula') {
-            onOperatingModeReceived?.call(OperatingMode.photocell);
-          } else if (modoStr == 'manual') {
-            onOperatingModeReceived?.call(OperatingMode.manual);
-          } else {
-            onOperatingModeReceived?.call(OperatingMode.app);
-          }
-        }
-
-        // 3. Luz ambiental
-        if (data.containsKey('luz')) {
-          final double light = (data['luz'] as num).toDouble();
-          onLightSensorReceived?.call(light);
-        }
-
-        // 4. Interruptor NA
-        if (data.containsKey('switch')) {
-          final bool sw = data['switch'] == true || data['switch'] == 1;
-          onManualSwitchReceived?.call(sw);
-        }
+        onStatusReceived?.call(
+          foco1: foco1,
+          foco2: foco2,
+          tiempoSegundos: tiempo,
+          dhtOk: dhtOk,
+          temp: temp,
+          hum: hum,
+        );
 
         client.close();
         _isPolling = false;
@@ -130,15 +107,15 @@ class Esp32ApService {
     return false;
   }
 
-  /// Envía comando para encender o apagar el foco: GET /foco?state=ON o OFF
-  Future<bool> setFoco(bool turnOn) async {
+  /// Envía comando para encender o apagar el Foco 1: GET /foco?state=ON o OFF
+  Future<bool> setFoco1(bool turnOn) async {
     if (_config.useSimulation) return true;
 
     final client = _createClient();
     try {
       final stateStr = turnOn ? 'ON' : 'OFF';
       final uri = Uri.parse('${_config.baseUrl}/foco?state=$stateStr');
-      debugPrint('[ESP32 AP] Enviando comando: $uri');
+      debugPrint('[ESP32 AP] Enviando comando Foco 1: $uri');
 
       final request = await client.getUrl(uri);
       final response = await request.close();
@@ -149,7 +126,7 @@ class Esp32ApService {
         return true;
       }
     } catch (e) {
-      debugPrint('[ESP32 AP] Error al enviar foco: $e');
+      debugPrint('[ESP32 AP] Error al enviar foco 1: $e');
       _setStatus(ESP32ConnectionStatus.error, e.toString());
     } finally {
       client.close();
@@ -157,15 +134,15 @@ class Esp32ApService {
     return false;
   }
 
-  /// Envía comando para ajustar la intensidad del dimmer: GET /set_dimmer?brillo=0..100
-  Future<bool> setDimmer(int brillo) async {
+  /// Envía comando para configurar el tiempo del Foco 2: GET /set_tiempo?segundos=X
+  Future<bool> setTiempoIR(int segundos) async {
     if (_config.useSimulation) return true;
 
     final client = _createClient();
     try {
-      final clamped = brillo.clamp(0, 100);
-      final uri = Uri.parse('${_config.baseUrl}/set_dimmer?brillo=$clamped');
-      debugPrint('[ESP32 AP] Enviando dimmer: $uri');
+      final clamped = segundos.clamp(1, 3600);
+      final uri = Uri.parse('${_config.baseUrl}/set_tiempo?segundos=$clamped');
+      debugPrint('[ESP32 AP] Enviando tiempo IR: $uri');
 
       final request = await client.getUrl(uri);
       final response = await request.close();
@@ -176,46 +153,7 @@ class Esp32ApService {
         return true;
       }
     } catch (e) {
-      debugPrint('[ESP32 AP] Error al regular dimmer: $e');
-      _setStatus(ESP32ConnectionStatus.error, e.toString());
-    } finally {
-      client.close();
-    }
-    return false;
-  }
-
-  /// Cambia el modo en el ESP32: GET /modo?value=app|photocell|manual
-  Future<bool> setModo(OperatingMode mode) async {
-    if (_config.useSimulation) return true;
-
-    final client = _createClient();
-    try {
-      String modoStr;
-      switch (mode) {
-        case OperatingMode.app:
-          modoStr = 'app';
-          break;
-        case OperatingMode.photocell:
-          modoStr = 'photocell';
-          break;
-        case OperatingMode.manual:
-          modoStr = 'manual';
-          break;
-      }
-
-      final uri = Uri.parse('${_config.baseUrl}/modo?value=$modoStr');
-      debugPrint('[ESP32 AP] Cambiando modo: $uri');
-
-      final request = await client.getUrl(uri);
-      final response = await request.close();
-
-      client.close();
-      if (response.statusCode == 200) {
-        _setStatus(ESP32ConnectionStatus.online);
-        return true;
-      }
-    } catch (e) {
-      debugPrint('[ESP32 AP] Error al cambiar modo: $e');
+      debugPrint('[ESP32 AP] Error al configurar tiempo IR: $e');
       _setStatus(ESP32ConnectionStatus.error, e.toString());
     } finally {
       client.close();

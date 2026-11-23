@@ -9,7 +9,10 @@ import '../services/storage_service.dart';
 class HomeAutomationProvider extends ChangeNotifier {
   final Esp32ApService _esp32Service = Esp32ApService();
 
-  bool _isLightOn = false;
+  bool _foco1Encendido = false;
+  bool _foco2Encendido = false;
+  int _tiempoEncendidoSeg = 60;
+
   ESP32ConnectionStatus _connectionStatus = ESP32ConnectionStatus.disconnected;
   String? _connectionError;
   bool _isESP32Available = false;
@@ -17,36 +20,33 @@ class HomeAutomationProvider extends ChangeNotifier {
   Esp32Config _config = const Esp32Config();
   bool _isInitialized = false;
 
-  OperatingMode _operatingMode = OperatingMode.app;
-  int _dimmerBrightness = 0;
+  Timer? _foco1Timer;
+  int _foco1Seconds = 0;
 
-  Timer? _runtimeTimer;
-  int _secondsOn = 0;
+  Timer? _foco2CountdownTimer;
+  int _foco2RemainingSeconds = 0;
 
-  Timer? _simulationTelemetryTimer;
-  Timer? _dimmerDebounceTimer;
+  Timer? _simulationTimer;
   final List<String> _eventLogs = [];
 
   // Getters
-  bool get isLightOn => _isLightOn;
-  int get dimmerBrightness => _dimmerBrightness;
-  RelayState get relayState => _isLightOn ? RelayState.closed : RelayState.open;
+  bool get foco1Encendido => _foco1Encendido;
+  bool get foco2Encendido => _foco2Encendido;
+  int get tiempoEncendidoSeg => _tiempoEncendidoSeg;
   ESP32ConnectionStatus get connectionStatus => _connectionStatus;
   String? get connectionError => _connectionError;
   bool get isESP32Available => _config.useSimulation ? true : _isESP32Available;
   DeviceTelemetry get telemetry => _telemetry;
   Esp32Config get config => _config;
   bool get isInitialized => _isInitialized;
-  int get secondsOn => _secondsOn;
+  int get foco1Seconds => _foco1Seconds;
+  int get foco2RemainingSeconds => _foco2RemainingSeconds;
   List<String> get eventLogs => List.unmodifiable(_eventLogs);
-  OperatingMode get operatingMode => _operatingMode;
-  double get ambientLightLevel => _telemetry.ambientLightLevel;
-  bool get isManualSwitchClosed => _telemetry.isManualSwitchClosed;
 
-  String get formattedRuntime {
-    final minutes = (_secondsOn ~/ 60).toString().padLeft(2, '0');
-    final seconds = (_secondsOn % 60).toString().padLeft(2, '0');
-    final hours = (_secondsOn ~/ 3600).toString().padLeft(2, '0');
+  String get formattedFoco1Runtime {
+    final minutes = (_foco1Seconds ~/ 60).toString().padLeft(2, '0');
+    final seconds = (_foco1Seconds % 60).toString().padLeft(2, '0');
+    final hours = (_foco1Seconds ~/ 3600).toString().padLeft(2, '0');
     return '$hours:$minutes:$seconds';
   }
 
@@ -55,45 +55,55 @@ class HomeAutomationProvider extends ChangeNotifier {
   }
 
   void _setupCallbacks() {
-    _esp32Service.onRelayStateReceived = (bool isOn) {
+    _esp32Service.onStatusReceived = ({
+      required bool foco1,
+      required bool foco2,
+      required int tiempoSegundos,
+      required bool dhtOk,
+      required double temp,
+      required double hum,
+    }) {
       _isESP32Available = true;
-      _addLog('ESP32 reportó foco: ${isOn ? "ENCENDIDO" : "APAGADO"}');
-      _setLightInternal(isOn, notifyESP32: false);
-    };
 
-    _esp32Service.onDimmerReceived = (int brillo) {
-      if (_dimmerBrightness != brillo) {
-        _dimmerBrightness = brillo;
-        _addLog('Dimmer sincronizado con ESP32: $brillo%');
-        notifyListeners();
+      // Sincronizar Foco 1
+      if (_foco1Encendido != foco1) {
+        _foco1Encendido = foco1;
+        _addLog('Foco 1 (Interruptor/App): ${foco1 ? "ENCENDIDO" : "APAGADO"}');
+        if (foco1) {
+          _startFoco1Timer();
+        } else {
+          _stopFoco1Timer();
+        }
       }
-    };
 
-    _esp32Service.onOperatingModeReceived = (OperatingMode mode) {
-      if (_operatingMode != mode) {
-        _operatingMode = mode;
-        _addLog('Modo sincronizado con ESP32: ${_modeName(mode)}');
-        _applyCurrentModeLogic();
-        notifyListeners();
+      // Sincronizar Foco 2
+      if (_foco2Encendido != foco2) {
+        _foco2Encendido = foco2;
+        _addLog('Foco 2 (Sensor IR): ${foco2 ? "ENCENDIDO (Detección)" : "APAGADO"}');
+        if (foco2) {
+          _startFoco2Countdown(tiempoSegundos);
+        } else {
+          _foco2CountdownTimer?.cancel();
+          _foco2RemainingSeconds = 0;
+        }
       }
-    };
 
-    _esp32Service.onLightSensorReceived = (double level) {
-      _telemetry = _telemetry.copyWith(ambientLightLevel: level);
-      if (_operatingMode == OperatingMode.photocell) {
-        _applyCurrentModeLogic();
-      } else {
-        notifyListeners();
+      // Sincronizar tiempo configurado
+      if (_tiempoEncendidoSeg != tiempoSegundos) {
+        _tiempoEncendidoSeg = tiempoSegundos;
       }
-    };
 
-    _esp32Service.onManualSwitchReceived = (bool isClosed) {
-      _telemetry = _telemetry.copyWith(isManualSwitchClosed: isClosed);
-      if (_operatingMode == OperatingMode.manual) {
-        _applyCurrentModeLogic();
-      } else {
-        notifyListeners();
-      }
+      _telemetry = _telemetry.copyWith(
+        foco1: foco1,
+        foco2: foco2,
+        tiempoSegundos: tiempoSegundos,
+        dhtOk: dhtOk,
+        temperature: temp,
+        humidity: hum,
+        lastSeen: DateTime.now(),
+      );
+
+      notifyListeners();
     };
 
     _esp32Service.onConnectionStatusChanged = (status, error) {
@@ -101,7 +111,7 @@ class HomeAutomationProvider extends ChangeNotifier {
       _connectionError = error;
       if (status == ESP32ConnectionStatus.online) {
         _isESP32Available = true;
-        _addLog('Conectado al punto de acceso ESP32 (${_config.ipAddress})');
+        _addLog('Conectado a ESP32 (${_config.ipAddress})');
       } else if (status == ESP32ConnectionStatus.disconnected) {
         _isESP32Available = false;
         _addLog('Sin conexión con ESP32 en ${_config.baseUrl}');
@@ -112,9 +122,9 @@ class HomeAutomationProvider extends ChangeNotifier {
 
   Future<void> initialize() async {
     _config = await StorageService.loadEsp32Config();
-    _isLightOn = await StorageService.loadLastRelayState();
+    _foco1Encendido = await StorageService.loadLastRelayState();
 
-    _addLog('Iniciando en modo Punto de Acceso (AP: ${_config.ipAddress})');
+    _addLog('Iniciando en SoftAP (${_config.apSsid} / ${_config.ipAddress})');
     _esp32Service.updateConfig(_config);
 
     if (_config.useSimulation) {
@@ -132,130 +142,117 @@ class HomeAutomationProvider extends ChangeNotifier {
     _connectionStatus = ESP32ConnectionStatus.online;
     _isESP32Available = true;
 
-    // Simular telemetría periódica en modo simulación
-    _simulationTelemetryTimer?.cancel();
-    _simulationTelemetryTimer = Timer.periodic(const Duration(seconds: 8), (_) {
+    _simulationTimer?.cancel();
+    _simulationTimer = Timer.periodic(const Duration(seconds: 4), (_) {
       if (!_config.useSimulation) return;
       final rand = Random();
       final tempVariation = (rand.nextDouble() - 0.5) * 0.4;
       final humVariation = (rand.nextDouble() - 0.5) * 0.8;
 
       _telemetry = _telemetry.copyWith(
-        temperature: double.parse((24.2 + tempVariation).toStringAsFixed(1)),
+        dhtOk: true,
+        temperature: double.parse((24.0 + tempVariation).toStringAsFixed(1)),
         humidity: double.parse((50.0 + humVariation).toStringAsFixed(1)),
-        powerWatts: _isLightOn ? 12.4 + rand.nextDouble() * 0.4 : 0.0,
-        rssi: -45,
-        ipAddress: '${_config.ipAddress} (SoftAP)',
+        foco1: _foco1Encendido,
+        foco2: _foco2Encendido,
+        tiempoSegundos: _tiempoEncendidoSeg,
         lastSeen: DateTime.now(),
       );
       notifyListeners();
     });
   }
 
-  Future<void> setOperatingMode(OperatingMode mode) async {
-    if (_operatingMode == mode) return;
+  /// Conmuta el Foco 1 (App / Interruptor)
+  Future<void> toggleFoco1() async {
+    await setFoco1(!_foco1Encendido);
+  }
 
-    _operatingMode = mode;
-    _addLog('Modo cambiado a: ${_modeName(mode)}');
+  Future<void> setFoco1(bool turnOn) async {
+    if (_foco1Encendido == turnOn) return;
+
+    _foco1Encendido = turnOn;
+    _addLog('Comando Foco 1: ${turnOn ? "ENCENDIDO" : "APAGADO"}');
+
+    if (turnOn) {
+      _startFoco1Timer();
+    } else {
+      _stopFoco1Timer();
+    }
+
+    notifyListeners();
+    unawaited(StorageService.saveLastRelayState(_foco1Encendido));
 
     if (!_config.useSimulation) {
-      await _esp32Service.setModo(mode);
-    }
-
-    _applyCurrentModeLogic();
-    notifyListeners();
-  }
-
-  void _applyCurrentModeLogic() {
-    switch (_operatingMode) {
-      case OperatingMode.app:
-        break;
-      case OperatingMode.photocell:
-        final shouldTurnOn = _telemetry.ambientLightLevel < 40.0;
-        setLight(shouldTurnOn);
-        break;
-      case OperatingMode.manual:
-        setLight(_telemetry.isManualSwitchClosed);
-        break;
-    }
-  }
-
-  void setAmbientLightLevel(double level) {
-    final clamped = level.clamp(0.0, 100.0);
-    _telemetry = _telemetry.copyWith(ambientLightLevel: clamped);
-    _addLog('Luz ambiental ajustada: ${clamped.toStringAsFixed(0)}%');
-
-    if (_operatingMode == OperatingMode.photocell) {
-      final shouldTurnOn = clamped < 40.0;
-      setLight(shouldTurnOn);
-    } else {
-      notifyListeners();
-    }
-  }
-
-  void setManualSwitch(bool isClosed) {
-    _telemetry = _telemetry.copyWith(isManualSwitchClosed: isClosed);
-    _addLog('Interruptor NA: ${isClosed ? "CERRADO" : "ABIERTO"}');
-
-    if (_operatingMode == OperatingMode.manual) {
-      setLight(isClosed);
-    } else {
-      notifyListeners();
-    }
-  }
-
-  Future<void> toggleLight() async {
-    if (_operatingMode == OperatingMode.app) {
-      await setLight(!_isLightOn);
-    }
-  }
-
-  Future<void> setLight(bool turnOn) async {
-    await _setLightInternal(turnOn, notifyESP32: true);
-  }
-
-  Future<void> _setLightInternal(bool turnOn, {required bool notifyESP32}) async {
-    if (_isLightOn == turnOn) return;
-
-    _isLightOn = turnOn;
-
-    if (_isLightOn) {
-      _startRuntimeTimer();
-      _telemetry = _telemetry.copyWith(powerWatts: 12.5);
-      _addLog('Foco ENCENDIDO');
-    } else {
-      _stopRuntimeTimer();
-      _telemetry = _telemetry.copyWith(powerWatts: 0.0);
-      _addLog('Foco APAGADO');
-    }
-
-    // ⚡ Actualización visual instantánea (0ms de latencia)
-    notifyListeners();
-
-    // Guardar estado en almacenamiento de fondo
-    unawaited(StorageService.saveLastRelayState(_isLightOn));
-
-    // Enviar comando HTTP al ESP32 en segundo plano
-    if (notifyESP32 && !_config.useSimulation) {
-      _esp32Service.setFoco(turnOn).then((success) {
+      _esp32Service.setFoco1(turnOn).then((success) {
         if (!success) {
-          _addLog('Aviso: Falló el envío HTTP al ESP32');
+          _addLog('Aviso: Falló el comando HTTP hacia Foco 1');
         }
       });
     }
   }
 
-  void _startRuntimeTimer() {
-    _runtimeTimer?.cancel();
-    _runtimeTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      _secondsOn++;
+  /// Guarda el nuevo tiempo de encendido para el Foco 2 (Sensor IR)
+  Future<void> setTiempoIR(int segundos) async {
+    final clamped = segundos.clamp(1, 3600);
+    _tiempoEncendidoSeg = clamped;
+    _addLog('Tiempo de Foco 2 (IR) actualizado a: $clamped seg');
+    notifyListeners();
+
+    if (!_config.useSimulation) {
+      final ok = await _esp32Service.setTiempoIR(clamped);
+      if (!ok) {
+        _addLog('Aviso: Falló el envío de nuevo tiempo al ESP32');
+      }
+    }
+  }
+
+  /// Simular detección de movimiento IR (útil para pruebas y modo demo)
+  void simulateTriggerIR() {
+    _foco2Encendido = true;
+    _foco2RemainingSeconds = _tiempoEncendidoSeg;
+    _addLog('¡Sensor IR activado! (Objeto detectado)');
+    notifyListeners();
+
+    _foco2CountdownTimer?.cancel();
+    _foco2CountdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_foco2RemainingSeconds > 0) {
+        _foco2RemainingSeconds--;
+        notifyListeners();
+      } else {
+        _foco2Encendido = false;
+        _addLog('Temporizador IR completado. Foco 2 APAGADO');
+        timer.cancel();
+        notifyListeners();
+      }
+    });
+  }
+
+  void _startFoco2Countdown(int seconds) {
+    _foco2RemainingSeconds = seconds;
+    _foco2CountdownTimer?.cancel();
+    _foco2CountdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_foco2RemainingSeconds > 0) {
+        _foco2RemainingSeconds--;
+        notifyListeners();
+      } else {
+        _foco2RemainingSeconds = 0;
+        timer.cancel();
+        notifyListeners();
+      }
+    });
+  }
+
+  void _startFoco1Timer() {
+    _foco1Timer?.cancel();
+    _foco1Timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      _foco1Seconds++;
       notifyListeners();
     });
   }
 
-  void _stopRuntimeTimer() {
-    _runtimeTimer?.cancel();
-    _secondsOn = 0;
+  void _stopFoco1Timer() {
+    _foco1Timer?.cancel();
+    _foco1Seconds = 0;
   }
 
   Future<void> updateConfig(Esp32Config newConfig) async {
@@ -270,11 +267,11 @@ class HomeAutomationProvider extends ChangeNotifier {
     if (newConfig.useSimulation) {
       _esp32Service.stopPolling();
       _startSimulation();
-      _addLog('Activado Modo Simulación');
+      _addLog('Modo Simulación Activado');
     } else {
-      _simulationTelemetryTimer?.cancel();
+      _simulationTimer?.cancel();
       if (changedHost || changedSim) {
-        _addLog('Conectando a Punto de Acceso ESP32: ${newConfig.baseUrl}');
+        _addLog('Conectando a ESP32: ${newConfig.baseUrl}');
         _connectionStatus = ESP32ConnectionStatus.connecting;
         _esp32Service.startPolling();
       }
@@ -294,17 +291,6 @@ class HomeAutomationProvider extends ChangeNotifier {
     }
   }
 
-  String _modeName(OperatingMode mode) {
-    switch (mode) {
-      case OperatingMode.app:
-        return 'Control App';
-      case OperatingMode.photocell:
-        return 'Fotocélula (Inteligente)';
-      case OperatingMode.manual:
-        return 'Interruptor NA (Manual)';
-    }
-  }
-
   void _addLog(String message) {
     final now = DateTime.now();
     final timeStr =
@@ -315,26 +301,11 @@ class HomeAutomationProvider extends ChangeNotifier {
     }
   }
 
-  /// Ajusta el brillo del circuito Dimmer (0 a 100%) con debounce suave
-  void setDimmerBrightness(int brightness) {
-    final clamped = brightness.clamp(0, 100);
-    if (_dimmerBrightness == clamped) return;
-
-    _dimmerBrightness = clamped;
-    notifyListeners();
-
-    _dimmerDebounceTimer?.cancel();
-    _dimmerDebounceTimer = Timer(const Duration(milliseconds: 140), () {
-      _esp32Service.setDimmer(_dimmerBrightness);
-      _addLog('Dimmer regulado a $_dimmerBrightness%');
-    });
-  }
-
   @override
   void dispose() {
-    _dimmerDebounceTimer?.cancel();
-    _runtimeTimer?.cancel();
-    _simulationTelemetryTimer?.cancel();
+    _foco1Timer?.cancel();
+    _foco2CountdownTimer?.cancel();
+    _simulationTimer?.cancel();
     _esp32Service.dispose();
     super.dispose();
   }

@@ -53,7 +53,7 @@ class _SettingsSheetState extends State<SettingsSheet>
           : _ipController.text.trim(),
       port: port,
       apSsid: _ssidController.text.trim().isEmpty
-          ? 'ESP32_Domotica'
+          ? 'Aplicaciones_Moviles'
           : _ssidController.text.trim(),
       useSimulation: _useSimulation,
     );
@@ -251,7 +251,7 @@ class _SettingsSheetState extends State<SettingsSheet>
         _buildTextField(
           controller: _ssidController,
           label: 'Nombre de Red Wi-Fi (SSID del ESP32)',
-          hint: 'ESP32_Domotica',
+          hint: 'Aplicaciones_Moviles',
           icon: Icons.wifi_rounded,
         ),
 

@@ -7,7 +7,7 @@ class Esp32Config {
   const Esp32Config({
     this.ipAddress = '192.168.4.1',
     this.port = 80,
-    this.apSsid = 'ESP32_Domotica',
+    this.apSsid = 'Aplicaciones_Moviles',
     this.useSimulation = false,
   });
 
@@ -31,7 +31,7 @@ class Esp32Config {
     return Esp32Config(
       ipAddress: json['ipAddress']?.toString() ?? '192.168.4.1',
       port: (json['port'] as num?)?.toInt() ?? 80,
-      apSsid: json['apSsid']?.toString() ?? 'ESP32_Domotica',
+      apSsid: json['apSsid']?.toString() ?? 'Aplicaciones_Moviles',
       useSimulation: json['useSimulation'] as bool? ?? false,
     );
   }
